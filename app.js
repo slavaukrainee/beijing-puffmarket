@@ -3,15 +3,15 @@ const SUPABASE_KEY = 'sb_publishable_du2PviAhyWt6Gx0iWgKMqw_UUC1BZiH';
 const PUZZLE_BOT_API_KEY = '8940120225:AAHONShsV1iwDRYIiqciNovNQoB4OyvFqhQ'; 
 const MY_PERSONAL_TG_ID = '1625251103';
 
-// Инициализация базы данных
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+// Инициализация базы данных под уникальным именем, чтобы не было конфликта
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let products = [];
 let cart = [];
 
 // Загрузка товаров из базы
 async function loadProducts() {
-  const { data, error } = await supabase.from('products').select('*');
+  const { data, error } = await supabaseClient.from('products').select('*');
   if (error) {
     console.error('Ошибка загрузки данных:', error);
     return;
@@ -182,8 +182,9 @@ async function placeOrder(event) {
     return;
   }
 
+  // Проверка остатков на складе
   for (const item of cart) {
-    const { data: product, error } = await supabase
+    const { data: product, error } = await supabaseClient
       .from('products')
       .select('stock, name, flavor')
       .eq('id', item.id)
@@ -200,14 +201,16 @@ async function placeOrder(event) {
     }
   }
 
+  // Обновление остатков на складе
   for (const item of cart) {
-    const { data: product } = await supabase.from('products').select('stock').eq('id', item.id).single();
-    await supabase.from('products').update({ stock: product.stock - item.quantity }).eq('id', item.id);
+    const { data: product } = await supabaseClient.from('products').select('stock').eq('id', item.id).single();
+    await supabaseClient.from('products').update({ stock: product.stock - item.quantity }).eq('id', item.id);
   }
 
   const totalPrice = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   
-  await supabase.from('orders').insert([{ 
+  // Создание записи в таблице заказов
+  await supabaseClient.from('orders').insert([{ 
     items: cart, 
     total: totalPrice, 
     contact: contactType === 'telegram' ? tgUsername : wechatId,
@@ -223,6 +226,7 @@ async function placeOrder(event) {
   orderText += `\n💰 **Итого к оплате:** ${totalPrice} ¥\n`;
 
   try {
+    // Отправка админу
     await fetch(`https://api.puzzlebot.top/api/v1/telegram/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${PUZZLE_BOT_API_KEY}` },
@@ -233,6 +237,7 @@ async function placeOrder(event) {
       })
     });
 
+    // Отправка чека клиенту
     if (contactType === 'telegram') {
       let clientText = `🙏 **Спасибо за заказ в Beijing Puff Market!**\n\nВот ваш электронный чек:\n\n` + orderText;
       await fetch(`https://api.puzzlebot.top/api/v1/telegram/sendMessage`, {
