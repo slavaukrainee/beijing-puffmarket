@@ -2,8 +2,9 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-  <title>Beijing Puff Market – Cyber Vape Store</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BEIJING PUFF MARKET</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -11,92 +12,115 @@
         extend: {
           colors: {
             cyber: {
-              bg: '#0a0a0f',
-              panel: '#12121a',
-              border: '#1e3a8f',
-              neon: '#00ff88',
-              neonDim: '#00cc6a',
-              magenta: '#ff00aa',
-              text: '#e0ffe8',
-              muted: '#6b8f7a'
+              bg: '#0a0b10',
+              panel: '#12131a',
+              border: '#1f2130',
+              neon: '#00ffaa',
+              magenta: '#ff0055',
+              text: '#f0f2f5',
+              muted: '#626880'
             }
           },
           fontFamily: {
             display: ['Orbitron', 'sans-serif'],
-            body: ['Rajdhani', 'sans-serif']
+            sans: ['Inter', 'sans-serif']
           }
         }
       }
     }
   </script>
-  <!-- Подключаем Supabase -->
-  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=Rajdhani:wght@500;600&display=swap" rel="stylesheet">
   <style>
-    body { background-color: #0a0a0f; color: #e0ffe8; font-family: 'Rajdhani', sans-serif; }
-    .neon-border { box-shadow: 0 0 15px rgba(0, 255, 136, 0.2), inset 0 0 15px rgba(0, 255, 136, 0.1); border: 1px solid #00ff88; }
-    .neon-text { text-shadow: 0 0 8px rgba(0, 255, 136, 0.6); }
-    .cyber-btn { background: linear-gradient(135deg, #00ff88 0%, #00cc6a 100%); color: #0a0a0f; font-weight: bold; transition: all 0.3s; }
-    .cyber-btn:hover { box-shadow: 0 0 20px rgba(0, 255, 136, 0.6); transform: scale(1.02); }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Orbitron:wght@700&display=swap');
+    body { background-color: #0a0b10; color: #f0f2f5; font-family: 'Inter', sans-serif; }
+    .cyber-btn {
+      background: linear-gradient(135deg, #00ffaa 0%, #00b377 100%);
+      color: #0a0b10;
+      font-weight: 700;
+      box-shadow: 0 0 15px rgba(0, 255, 170, 0.4);
+      transition: all 0.3s ease;
+    }
+    .cyber-btn:hover {
+      box-shadow: 0 0 25px rgba(0, 255, 170, 0.8);
+      transform: translateY(-2px);
+    }
   </style>
 </head>
-<body class="p-4 md:p-8">
+<body class="min-h-screen flex flex-col justify-between">
 
-  <!-- Шапка -->
-  <header class="max-w-6xl mx-auto mb-8 flex justify-between items-center border-b border-cyber-border pb-4">
-    <h1 class="text-2xl md:text-4xl font-display uppercase tracking-widest neon-text text-cyber-neon">Beijing Puff Market</h1>
-    <button onclick="toggleCart()" class="relative border border-cyber-neon px-4 py-2 rounded text-cyber-neon font-bold uppercase tracking-wider hover:bg-cyber-neon hover:text-cyber-bg transition">
-      🛒 Корзина (<span id="cart-count">0</span>)
-    </button>
+  <!-- Шапка сайта -->
+  <header class="border-b border-cyber-border bg-cyber-panel/80 backdrop-blur sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 h-20 flex justify-between items-center">
+      <div>
+        <h1 class="text-2xl font-display uppercase tracking-wider text-cyber-neon">BEIJING PUFF</h1>
+        <p class="text-xs text-cyber-muted uppercase tracking-widest">Cyber Vape • 北京</p>
+      </div>
+      <button onclick="toggleCart()" class="relative border border-cyber-neon text-cyber-neon px-5 py-2 rounded-md font-medium hover:bg-cyber-neon hover:text-cyber-bg transition flex items-center gap-2">
+        🛍️ Корзина
+        <span id="cart-count" class="bg-cyber-magenta text-white text-xs px-2 py-0.5 rounded-full">0</span>
+      </button>
+    </div>
   </header>
 
-  <!-- Каталог товаров -->
-  <main class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6" id="products-container">
-    <!-- Сюда JS вставит сгруппированные карточки -->
+  <!-- Главный контейнер для товаров -->
+  <main class="max-w-7xl mx-auto px-4 py-10 w-full flex-grow">
+    <div id="products-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+      <!-- Сюда товары сгенерируются из app.js -->
+    </div>
   </main>
 
-  <!-- Модалка корзины и оформления -->
-  <div id="cart-modal" class="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-cyber-panel border neon-border w-full max-w-lg rounded-lg p-6 max-h-[90vh] overflow-y-auto">
-      <div class="flex justify-between items-center mb-4 border-b border-cyber-border pb-2">
-        <h2 class="text-xl font-display uppercase text-cyber-neon">Ваш заказ</h2>
-        <button onclick="toggleCart()" class="text-cyber-muted hover:text-cyber-magenta text-xl">✕</button>
+  <!-- Подвал -->
+  <footer class="border-t border-cyber-border bg-cyber-panel py-6 text-center text-sm text-cyber-muted">
+    &copy; 2026 BEIJING PUFF MARKET. All rights reserved.
+  </footer>
+
+  <!-- Модальное окно корзины -->
+  <div id="cart-modal" class="fixed inset-0 z-50 hidden bg-black/70 backdrop-blur-sm flex justify-end">
+    <div class="bg-cyber-panel w-full max-w-md h-full p-6 flex flex-col justify-between border-l border-cyber-border shadow-2xl">
+      <div>
+        <div class="flex justify-between items-center mb-6 border-b border-cyber-border pb-4">
+          <h2 class="text-2xl font-display uppercase text-cyber-neon">Корзина</h2>
+          <button onclick="toggleCart()" class="text-cyber-muted hover:text-cyber-magenta text-xl">&times;</button>
+        </div>
+
+        <!-- Список выбранных позиций -->
+        <div id="cart-items" class="space-y-4 max-h-[40vh] overflow-y-auto mb-6 pr-2">
+          <!-- Рендерится из JS -->
+        </div>
+
+        <!-- Форма отправки заказа -->
+        <form id="order-form" onsubmit="placeOrder(event)" class="space-y-4 border-t border-cyber-border pt-4">
+          <div>
+            <label class="block text-xs uppercase text-cyber-muted mb-1">Способ связи:</label>
+            <select id="contact-type" onchange="toggleContactFields()" class="w-full bg-cyber-bg border border-cyber-border p-2.5 rounded text-cyber-text focus:outline-none focus:border-cyber-neon">
+              <option value="telegram">Telegram</option>
+              <option value="wechat">WeChat</option>
+            </select>
+          </div>
+
+          <!-- Поле для Telegram -->
+          <div id="tg-field">
+            <label class="block text-xs uppercase text-cyber-muted mb-1">Ваш Telegram Username:</label>
+            <input type="text" id="tg-username" placeholder="username (без @)" class="w-full bg-cyber-bg border border-cyber-border p-2.5 rounded text-cyber-text focus:outline-none focus:border-cyber-neon">
+          </div>
+
+          <!-- Поле для WeChat -->
+          <div id="wechat-field" class="hidden">
+            <label class="block text-xs uppercase text-cyber-muted mb-1">Ваш WeChat ID:</label>
+            <input type="text" id="wechat-id" placeholder="wxid_..." class="w-full bg-cyber-bg border border-cyber-border p-2.5 rounded text-cyber-text focus:outline-none focus:border-cyber-neon">
+          </div>
+        </form>
       </div>
 
-      <!-- Список товаров в корзине -->
-      <div id="cart-items" class="space-y-4 mb-6"></div>
-
-      <div class="flex justify-between items-center font-bold text-lg mb-6 border-t border-cyber-border pt-4">
-        <span>ИТОГО:</span>
-        <span class="text-cyber-neon text-xl"><span id="cart-total">0</span> ¥</span>
-      </div>
-
-      <!-- Форма заказа -->
-      <form id="order-form" onsubmit="placeOrder(event)" class="space-y-4">
-        <div>
-          <label class="block text-sm uppercase tracking-wider text-cyber-muted mb-1">Способ связи</label>
-          <select id="contact-type" class="w-full bg-cyber-bg border border-cyber-border p-2 rounded text-cyber-text focus:outline-none focus:border-cyber-neon" onchange="toggleContactFields()">
-            <option value="telegram">Telegram</option>
-            <option value="wechat">WeChat</option>
-          </select>
+      <!-- Кнопка заказа и Итого -->
+      <div class="border-t border-cyber-border pt-4 mt-6">
+        <div class="flex justify-between items-center mb-4">
+          <span class="text-cyber-muted uppercase text-sm">Итого к оплате:</span>
+          <span class="text-2xl font-bold text-cyber-neon"><span id="cart-total">0</span> ¥</span>
         </div>
-
-        <!-- Поле для Telegram -->
-        <div id="tg-field">
-          <label class="block text-sm uppercase tracking-wider text-cyber-muted mb-1">Ваш @username в Telegram</label>
-          <input type="text" id="tg-username" class="w-full bg-cyber-bg border border-cyber-border p-2 rounded text-cyber-text focus:outline-none focus:border-cyber-neon" placeholder="username (без знака @)">
-        </div>
-
-        <!-- Поле для WeChat -->
-        <div id="wechat-field" class="hidden">
-          <label class="block text-sm uppercase tracking-wider text-cyber-muted mb-1">Ваш WeChat ID</label>
-          <input type="text" id="wechat-id" class="w-full bg-cyber-bg border border-cyber-border p-2 rounded text-cyber-text focus:outline-none focus:border-cyber-neon" placeholder="Введите ваш WeChat ID">
-        </div>
-
-        <button type="submit" class="w-full cyber-btn py-3 rounded uppercase tracking-widest font-display mt-4">
-          Подтвердить и заказать
+        <button type="submit" form="order-form" class="cyber-btn w-full py-3.5 rounded text-center uppercase tracking-wider font-bold">
+          Оформить заказ
         </button>
-      </form>
+      </div>
     </div>
   </div>
 

@@ -25,7 +25,6 @@ function renderProducts() {
   const container = document.getElementById('products-container');
   container.innerHTML = '';
 
-  // Группируем массив по названию модели (например, "Waka 20000")
   const grouped = {};
   products.forEach(p => {
     if (!grouped[p.name]) {
@@ -34,15 +33,12 @@ function renderProducts() {
     grouped[p.name].push(p);
   });
 
-  // Создаем карточки на основе сгруппированных данных
   Object.keys(grouped).forEach(modelName => {
     const variants = grouped[modelName];
     const firstVariant = variants[0];
 
-    // Генерируем опции для выпадающего списка вкусов
     let optionsHtml = '';
     variants.forEach(v => {
-      // Показываем вкус и пишем, если товара нет в наличии
       const outOfStock = v.stock <= 0 ? ' (Нет в наличии)' : '';
       optionsHtml += `<option value="${v.id}" ${v.stock <= 0 ? 'disabled' : ''}>${v.flavor}${outOfStock}</option>`;
     });
@@ -51,7 +47,7 @@ function renderProducts() {
     card.className = 'bg-cyber-panel border border-cyber-border rounded-lg p-5 flex flex-col justify-between hover:border-cyber-neon transition';
     card.innerHTML = `
       <div>
-        <div class="h-48 bg-cyber-bg rounded mb-4 flex items-center justify-center border border-cyber-border overflow-hidden">
+        <div class="h-48 bg-cyber-bg rounded mb-4 flex items-center justify-center border border-cyber-border overflow-hidden relative">
           <img src="${firstVariant.image_url || 'https://via.placeholder.com/150'}" alt="${modelName}" class="object-contain max-h-full">
         </div>
         <h3 class="text-xl font-display uppercase tracking-wide text-cyber-text mb-2">${modelName}</h3>
@@ -70,12 +66,10 @@ function renderProducts() {
       </div>`;
     
     container.appendChild(card);
-    // Инициализируем цену для первой загрузки карточки
     updateCardPrice(firstVariant.id, { value: firstVariant.id });
   });
 }
 
-// Обновление цены при смене вкуса в карточке
 function updateCardPrice(baseId, selectElement) {
   const selectedId = selectElement.value;
   const product = products.find(p => p.id == selectedId);
@@ -84,10 +78,9 @@ function updateCardPrice(baseId, selectElement) {
   }
 }
 
-// Добавление в корзину
 function addToCartFromCard(baseId) {
   const selectElement = document.getElementById(`select-${baseId}`);
-  const selectedId = selectElement.value; // Получаем ID конкретного вкуса
+  const selectedId = selectElement.value; 
   const product = products.find(p => p.id == selectedId);
 
   if (!product || product.stock <= 0) {
@@ -109,7 +102,6 @@ function addToCartFromCard(baseId) {
   updateCartUI();
 }
 
-// Переключение полей Telegram / WeChat в форме
 function toggleContactFields() {
   const type = document.getElementById('contact-type').value;
   document.getElementById('tg-field').classList.toggle('hidden', type !== 'telegram');
@@ -135,7 +127,7 @@ function updateCartUI() {
       </div>
       <div class="flex items-center gap-2">
         <button onclick="changeQty('${item.id}', -1)" class="bg-cyber-panel px-2 py-1 rounded text-cyber-text hover:text-cyber-magenta">-</button>
-        <span class="font-bold">${item.quantity}</span>
+        <span class="font-bold text-cyber-text">${item.quantity}</span>
         <button onclick="changeQty('${item.id}', 1)" class="bg-cyber-panel px-2 py-1 rounded text-cyber-text hover:text-cyber-neon">+</button>
       </div>
     `;
@@ -167,7 +159,6 @@ function toggleCart() {
   document.getElementById('cart-modal').classList.toggle('hidden');
 }
 
-// ОФОРМЛЕНИЕ ЗАКАЗА, ПРОВЕРКА СКЛАДА И ОТПРАВКА В TELEGRAM
 async function placeOrder(event) {
   event.preventDefault();
   
@@ -191,7 +182,6 @@ async function placeOrder(event) {
     return;
   }
 
-  // 1. АКТУАЛЬНАЯ ПРОВЕРКА СКЛАДА В SUPABASE ДЛЯ КАЖДОГО ВКУСА
   for (const item of cart) {
     const { data: product, error } = await supabase
       .from('products')
@@ -205,23 +195,18 @@ async function placeOrder(event) {
     }
 
     if (product.stock < item.quantity) {
-      alert(`Ошибка! Товар "${product.name}" со вкусом "${product.flavor}" раскупили. Доступно на складе: ${product.stock} шт.`);
+      alert(`Ошибка! Товар "${product.name}" со вкусом "${product.flavor}" раскупили. Доступно: ${product.stock} шт.`);
       return;
     }
   }
 
-  // 2. ЕСЛИ ВСЕ ЕСТЬ — ВЫЧИТАЕМ ИЗ СКЛАДА И ОФОРМЛЯЕМ ЗАКАЗ
   for (const item of cart) {
     const { data: product } = await supabase.from('products').select('stock').eq('id', item.id).single();
-    await supabase
-      .from('products')
-      .update({ stock: product.stock - item.quantity })
-      .eq('id', item.id);
+    await supabase.from('products').update({ stock: product.stock - item.quantity }).eq('id', item.id);
   }
 
   const totalPrice = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   
-  // Сохраняем в историю заказов Supabase
   await supabase.from('orders').insert([{ 
     items: cart, 
     total: totalPrice, 
@@ -229,7 +214,6 @@ async function placeOrder(event) {
     contact_type: contactType
   }]);
 
-  // 3. ФОРМИРУЕМ СТРУКТУРИРОВАННЫЙ ТЕКСТ ЧЕКА
   let orderText = `🛍️ **НОВЫЙ ЗАКАЗ С САЙТА!**\n\n`;
   orderText += `👤 **Клиент:** ${clientContact}\n\n`;
   orderText += `📦 **Выбранные позиции:**\n`;
@@ -237,10 +221,8 @@ async function placeOrder(event) {
     orderText += `• ${item.name} (Вкус: ${item.flavor}) — ${item.quantity} шт. (${item.price * item.quantity} ¥)\n`;
   });
   orderText += `\n💰 **Итого к оплате:** ${totalPrice} ¥\n`;
-  orderText += `_Остатки на складе успешно обновлены._`;
 
   try {
-    // 4. ОТПРАВКА УВЕДОМЛЕНИЯ АДМИНИСТРАТОРУ
     await fetch(`https://api.puzzlebot.top/api/v1/telegram/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${PUZZLE_BOT_API_KEY}` },
@@ -251,10 +233,8 @@ async function placeOrder(event) {
       })
     });
 
-    // 5. ОТПРАВКА ЧЕКА КЛИЕНТУ В ТГ (ЕСЛИ ОН ВЫБРАЛ ТЕЛЕГРАМ)
     if (contactType === 'telegram') {
       let clientText = `🙏 **Спасибо за заказ в Beijing Puff Market!**\n\nВот ваш электронный чек:\n\n` + orderText;
-      
       await fetch(`https://api.puzzlebot.top/api/v1/telegram/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${PUZZLE_BOT_API_KEY}` },
@@ -266,16 +246,15 @@ async function placeOrder(event) {
       });
     }
 
-    alert('Заказ успешно отправлен! Чек выслан в Telegram.');
+    alert('Заказ успешно отправлен!');
     cart = [];
     updateCartUI();
     toggleCart();
-    loadProducts(); // Перезагружаем интерфейс, чтобы обновить списки вкусов и остатки
+    loadProducts(); 
   } catch (err) {
     console.error(err);
     alert('Заказ оформлен, но возникла ошибка при отправке сообщения в бот.');
   }
 }
 
-// Запуск при старте страницы
 loadProducts();
