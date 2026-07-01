@@ -8,6 +8,29 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 let products = [];
 let cart = [];
 
+// === НАСТРОЙКИ ТОВАРОВ (ЦЕНЫ И КАРТИНКИ) ===
+// Функция автоматически подбирает картинку из папки images/ в зависимости от названия
+function getLocalImage(modelName) {
+  const name = modelName.toUpperCase();
+  if (name.includes('PAFOS')) return 'images/pafos-195.png';
+  if (name.includes('35000')) return 'images/waka35000.png';
+  if (name.includes('EXTRA')) return 'images/wakaextra.png';
+  if (name.includes('20000')) return 'images/waka-20000.png';
+  return 'images/waka-20000.png'; // Картинка по умолчанию
+}
+
+// Функция автоматически назначает цену в зависимости от названия
+function getLocalPrice(modelName, dbPrice) {
+  if (dbPrice && dbPrice > 0) return dbPrice; // Если цена есть в базе, берем её
+  
+  const name = modelName.toUpperCase();
+  if (name.includes('PAFOS')) return 195;
+  if (name.includes('35000')) return 200; // Можешь поменять цену на нужную
+  if (name.includes('EXTRA')) return 160; // Можешь поменять цену на нужную
+  if (name.includes('20000')) return 155;
+  return 155; // Цена по умолчанию
+}
+
 // Загрузка товаров из базы
 async function loadProducts() {
   const { data, error } = await supabaseClient.from('products').select('*');
@@ -16,17 +39,21 @@ async function loadProducts() {
     return;
   }
   
-  // Обработка данных строго по твоим колонкам: name_ru, price, is_available, image_url
+  // Обрабатываем базу и склеиваем её с нашими локальными фото/ценами
   products = data.map(p => {
     const fullTitle = p.name_ru || 'Товар - Без вкуса';
-    const parts = fullTitle.split(' - ');
+    // Разбиваем по дефису. Например "WAKA 20000 - Мята" -> "WAKA 20000" и "Мята"
+    const parts = fullTitle.split('-'); 
+    const modelName = parts[0] ? parts[0].trim() : 'Товар';
+    const flavorName = parts[1] ? parts[1].trim() : 'Оригинальный';
+
     return {
       ...p,
-      displayName: parts[0] ? parts[0].trim() : 'Товар',
-      displayFlavor: parts[1] ? parts[1].trim() : 'Оригинальный',
-      price: p.price || 0,
-      isAvailable: p.is_available !== false, // Проверка доступности по твоей колонке is_available
-      imageUrl: p.image_url || ''
+      displayName: modelName,
+      displayFlavor: flavorName,
+      price: getLocalPrice(modelName, p.price),
+      isAvailable: p.is_available !== false,
+      imageUrl: getLocalImage(modelName)
     };
   });
 
@@ -39,10 +66,11 @@ function renderProducts() {
   container.innerHTML = '';
 
   if (products.length === 0) {
-    container.innerHTML = '<p class="text-cyber-muted text-center w-full">Товары не найдены</p>';
+    container.innerHTML = '<p class="text-cyber-muted text-center w-full">Товары загружаются...</p>';
     return;
   }
 
+  // Группируем по бренду
   const grouped = {};
   products.forEach(p => {
     if (!grouped[p.displayName]) {
@@ -51,9 +79,10 @@ function renderProducts() {
     grouped[p.displayName].push(p);
   });
 
+  // Рисуем карточки
   Object.keys(grouped).forEach(modelName => {
     const variants = grouped[modelName];
-    const firstVariant = variants[0];
+    const firstVariant = variants[0]; // Берем картинку и цену от первого вкуса в группе
 
     let optionsHtml = '';
     variants.forEach(v => {
@@ -65,35 +94,26 @@ function renderProducts() {
     card.className = 'bg-cyber-panel border border-cyber-border rounded-lg p-5 flex flex-col justify-between hover:border-cyber-neon transition';
     card.innerHTML = `
       <div>
-        <div class="h-48 bg-cyber-bg rounded mb-4 flex items-center justify-center border border-cyber-border overflow-hidden relative">
-          <img src="${firstVariant.imageUrl || 'https://via.placeholder.com/150'}" alt="${modelName}" class="object-contain max-h-full">
+        <div class="h-48 bg-cyber-bg rounded mb-4 flex items-center justify-center border border-cyber-border overflow-hidden relative p-2">
+          <img src="${firstVariant.imageUrl}" alt="${modelName}" class="object-contain h-full w-full drop-shadow-[0_0_15px_rgba(0,255,170,0.2)]">
         </div>
         <h3 class="text-xl font-display uppercase tracking-wide text-cyber-text mb-2">${modelName}</h3>
         
         <label class="block text-xs uppercase tracking-wider text-cyber-muted mb-1">Выбрать вкус:</label>
-        <select id="select-${firstVariant.id}" class="w-full bg-cyber-bg border border-cyber-border p-2 rounded text-cyber-text mb-4 focus:outline-none focus:border-cyber-neon" onchange="updateCardPrice('${firstVariant.id}', this)">
+        <select id="select-${firstVariant.id}" class="w-full bg-cyber-bg border border-cyber-border p-2 rounded text-cyber-text mb-4 focus:outline-none focus:border-cyber-neon">
           ${optionsHtml}
         </select>
       </div>
       
-      <div class="flex justify-between items-center mt-4">
-        <span class="text-2xl font-bold text-cyber-neon" id="price-${firstVariant.id}">${firstVariant.price} ¥</span>
-        <button onclick="addToCartFromCard('${firstVariant.id}')" class="cyber-btn px-4 py-2 rounded text-sm uppercase tracking-wider">
+      <div class="flex justify-between items-center mt-4 pt-4 border-t border-cyber-border">
+        <span class="text-2xl font-bold text-cyber-neon">${firstVariant.price} ¥</span>
+        <button onclick="addToCartFromCard('${firstVariant.id}')" class="bg-cyber-neon text-cyber-bg font-bold px-4 py-2 rounded text-sm uppercase tracking-wider hover:bg-white transition shadow-[0_0_10px_rgba(0,255,170,0.5)]">
           В корзину
         </button>
       </div>`;
     
     container.appendChild(card);
-    updateCardPrice(firstVariant.id, { value: firstVariant.id });
   });
-}
-
-function updateCardPrice(baseId, selectElement) {
-  const selectedId = selectElement.value;
-  const product = products.find(p => p.id == selectedId);
-  if (product) {
-    document.getElementById(`price-${baseId}`).innerText = `${product.price} ¥`;
-  }
 }
 
 function addToCartFromCard(baseId) {
@@ -114,6 +134,15 @@ function addToCartFromCard(baseId) {
   }
 
   updateCartUI();
+  // Анимация добавления
+  const btn = event.currentTarget;
+  const originalText = btn.innerText;
+  btn.innerText = 'Добавлено!';
+  btn.classList.add('bg-white');
+  setTimeout(() => {
+    btn.innerText = originalText;
+    btn.classList.remove('bg-white');
+  }, 1000);
 }
 
 function toggleContactFields() {
@@ -140,9 +169,9 @@ function updateCartUI() {
         <div class="text-xs text-cyber-muted">${item.price} ¥ × ${item.quantity} шт.</div>
       </div>
       <div class="flex items-center gap-2">
-        <button onclick="changeQty('${item.id}', -1)" class="bg-cyber-panel px-2 py-1 rounded text-cyber-text hover:text-cyber-magenta">-</button>
-        <span class="font-bold text-cyber-text">${item.quantity}</span>
-        <button onclick="changeQty('${item.id}', 1)" class="bg-cyber-panel px-2 py-1 rounded text-cyber-text hover:text-cyber-neon">+</button>
+        <button onclick="changeQty('${item.id}', -1)" class="bg-cyber-panel px-3 py-1 rounded text-cyber-text hover:text-cyber-magenta border border-cyber-border">-</button>
+        <span class="font-bold text-cyber-text w-4 text-center">${item.quantity}</span>
+        <button onclick="changeQty('${item.id}', 1)" class="bg-cyber-panel px-3 py-1 rounded text-cyber-text hover:text-cyber-neon border border-cyber-border">+</button>
       </div>
     `;
     itemsContainer.appendChild(row);
@@ -189,7 +218,7 @@ async function placeOrder(event) {
     return;
   }
 
-  // Проверка доступности перед оформлением
+  // Проверка актуальности товара в базе
   for (const item of cart) {
     const { data: product, error } = await supabaseClient
       .from('products')
@@ -205,13 +234,13 @@ async function placeOrder(event) {
 
   const totalPrice = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   
-  // Собираем текстовое описание заказа для сохранения в колонку доставки
+  // Описание для базы
   let dbItemsSummary = '';
   cart.forEach(item => {
     dbItemsSummary += `[${item.displayName} - ${item.displayFlavor} x${item.quantity}] `;
   });
 
-  // Запись в таблицу orders строго по твоим колонкам!
+  // Запись заказа в базу
   const { error: dbError } = await supabaseClient.from('orders').insert([{ 
     client_name: contactType === 'telegram' ? tgUsername : 'WeChat User', 
     wechat_alipay_id: contactType === 'wechat' ? wechatId : 'TG: ' + tgUsername, 
@@ -219,11 +248,9 @@ async function placeOrder(event) {
     total_price: totalPrice
   }]);
 
-  if (dbError) {
-    console.error("Ошибка сохранения в базу:", dbError);
-  }
+  if (dbError) console.error("Ошибка сохранения в базу:", dbError);
 
-  // Текст для Telegram бота
+  // Сообщение для Telegram бота
   let orderText = `🛍️ **НОВЫЙ ЗАКАЗ С САЙТА!**\n\n`;
   orderText += `👤 **Клиент:** ${clientContact}\n\n`;
   orderText += `📦 **Выбранные позиции:**\n`;
@@ -233,7 +260,9 @@ async function placeOrder(event) {
   orderText += `\n💰 **Итого к оплате:** ${totalPrice} ¥\n`;
 
   try {
-    // Отправка уведомления админу в ТГ
+    const originalBtnText = event.submitter.innerText;
+    event.submitter.innerText = 'Отправка...';
+    
     await fetch(`https://api.puzzlebot.top/api/v1/telegram/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${PUZZLE_BOT_API_KEY}` },
@@ -244,11 +273,12 @@ async function placeOrder(event) {
       })
     });
 
-    alert('Заказ успешно отправлен!');
+    alert('Заказ успешно отправлен! Мы свяжемся с вами в ближайшее время.');
     cart = [];
     updateCartUI();
     toggleCart();
     loadProducts(); 
+    event.submitter.innerText = originalBtnText;
   } catch (err) {
     console.error(err);
     alert('Ошибка при отправке уведомления, но заказ зафиксирован.');
