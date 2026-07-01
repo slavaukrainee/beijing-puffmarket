@@ -16,12 +16,43 @@ async function loadProducts() {
     return;
   }
   
-  // Автоматически разделяем "Бренд - Вкус" из твоей базы данных
+  console.log("Данные из базы:", data);
+
+  // Автоматический подбор колонок, если они названы нестандартно
   products = data.map(p => {
-    const fullTitle = p.title || p.name || 'Товар - Без вкуса';
-    const parts = fullTitle.split(' - ');
+    let fullTitle = '';
+    
+    // 1. Авто-поиск текстовой колонки с названием товара
+    const standardKeys = ['title', 'name', 'product_name', 'text', 'description'];
+    for (let key of standardKeys) {
+      if (p[key]) { fullTitle = p[key]; break; }
+    }
+    if (!fullTitle) {
+      for (let key in p) {
+        if (typeof p[key] === 'string' && !p[key].includes('http') && key !== 'id' && key !== 'created_at') {
+          fullTitle = p[key];
+          break;
+        }
+      }
+    }
+    if (!fullTitle) fullTitle = 'Товар - Без вкуса';
+
+    // 2. Авто-поиск колонки с картинкой (ищет строку, содержащую ссылку)
+    let imageUrl = p.image_url || p.image || p.img || '';
+    if (!imageUrl) {
+      for (let key in p) {
+        if (typeof p[key] === 'string' && p[key].includes('http')) {
+          imageUrl = p[key];
+          break;
+        }
+      }
+    }
+
+    // Разделяем бренд и вкус по дефису
+    const parts = fullTitle.split('-');
     return {
       ...p,
+      image_url: imageUrl,
       displayName: parts[0] ? parts[0].trim() : 'Товар',
       displayFlavor: parts[1] ? parts[1].trim() : 'Оригинальный'
     };
@@ -34,6 +65,11 @@ async function loadProducts() {
 function renderProducts() {
   const container = document.getElementById('products-container');
   container.innerHTML = '';
+
+  if (products.length === 0) {
+    container.innerHTML = '<p class="text-cyber-muted text-center w-full">Товары не найдены</p>';
+    return;
+  }
 
   const grouped = {};
   products.forEach(p => {
@@ -49,8 +85,9 @@ function renderProducts() {
 
     let optionsHtml = '';
     variants.forEach(v => {
-      const outOfStock = v.stock <= 0 ? ' (Нет в наличии)' : '';
-      optionsHtml += `<option value="${v.id}" ${v.stock <= 0 ? 'disabled' : ''}>${v.displayFlavor}${outOfStock}</option>`;
+      const stockAvailable = typeof v.stock === 'number' ? v.stock : 99;
+      const outOfStock = stockAvailable <= 0 ? ' (Нет в наличии)' : '';
+      optionsHtml += `<option value="${v.id}" ${stockAvailable <= 0 ? 'disabled' : ''}>${v.displayFlavor}${outOfStock}</option>`;
     });
 
     const card = document.createElement('div');
@@ -93,15 +130,18 @@ function addToCartFromCard(baseId) {
   const selectedId = selectElement.value; 
   const product = products.find(p => p.id == selectedId);
 
-  if (!product || product.stock <= 0) {
+  if (!product) return;
+  const stockAvailable = typeof product.stock === 'number' ? product.stock : 99;
+
+  if (stockAvailable <= 0) {
     alert('Этого вкуса нет в наличии.');
     return;
   }
 
   const cartItem = cart.find(item => item.id === product.id);
   if (cartItem) {
-    if (cartItem.quantity >= product.stock) {
-      alert(`Нельзя добавить больше. На складе всего: ${product.stock} шт.`);
+    if (cartItem.quantity >= stockAvailable) {
+      alert(`Нельзя добавить больше. На складе всего: ${stockAvailable} шт.`);
       return;
     }
     cartItem.quantity++;
@@ -150,121 +190,3 @@ function updateCartUI() {
 function changeQty(id, delta) {
   const item = cart.find(i => i.id == id);
   if (!item) return;
-  
-  const product = products.find(p => p.id == id);
-  
-  item.quantity += delta;
-  if (item.quantity > product.stock) {
-    alert(`На складе доступно только ${product.stock} шт.`);
-    item.quantity = product.stock;
-  }
-  
-  if (item.quantity <= 0) {
-    cart = cart.filter(i => i.id != id);
-  }
-  updateCartUI();
-}
-
-function toggleCart() {
-  document.getElementById('cart-modal').classList.toggle('hidden');
-}
-
-async function placeOrder(event) {
-  event.preventDefault();
-  
-  if (cart.length === 0) {
-    alert('Ваша корзина пуста');
-    return;
-  }
-
-  const contactType = document.getElementById('contact-type').value;
-  const tgUsername = document.getElementById('tg-username').value.trim().replace('@', '');
-  const wechatId = document.getElementById('wechat-id').value.trim();
-
-  const clientContact = contactType === 'telegram' ? '@' + tgUsername : 'WeChat ID: ' + wechatId;
-
-  if (contactType === 'telegram' && !tgUsername) {
-    alert('Пожалуйста, введите ваш Telegram username');
-    return;
-  }
-  if (contactType === 'wechat' && !wechatId) {
-    alert('Пожалуйста, введите ваш WeChat ID');
-    return;
-  }
-
-  for (const item of cart) {
-    const { data: product, error } = await supabaseClient
-      .from('products')
-      .select('stock')
-      .eq('id', item.id)
-      .single();
-
-    if (error || !product) {
-      alert(`Ошибка при верификации товара`);
-      return;
-    }
-
-    if (product.stock < item.quantity) {
-      alert(`Ошибка! Товар со вкусом "${item.displayFlavor}" раскупили. Доступно: ${product.stock} шт.`);
-      return;
-    }
-  }
-
-  for (const item of cart) {
-    const { data: product } = await supabaseClient.from('products').select('stock').eq('id', item.id).single();
-    await supabaseClient.from('products').update({ stock: product.stock - item.quantity }).eq('id', item.id);
-  }
-
-  const totalPrice = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  
-  await supabaseClient.from('orders').insert([{ 
-    items: cart, 
-    total: totalPrice, 
-    contact: contactType === 'telegram' ? tgUsername : wechatId,
-    contact_type: contactType
-  }]);
-
-  let orderText = `🛍️ **НОВЫЙ ЗАКАЗ С САЙТА!**\n\n`;
-  orderText += `👤 **Клиент:** ${clientContact}\n\n`;
-  orderText += `📦 **Выбранные позиции:**\n`;
-  cart.forEach(item => {
-    orderText += `• ${item.displayName} (Вкус: ${item.displayFlavor}) — ${item.quantity} шт. (${item.price * item.quantity} ¥)\n`;
-  });
-  orderText += `\n💰 **Итого к оплате:** ${totalPrice} ¥\n`;
-
-  try {
-    await fetch(`https://api.puzzlebot.top/api/v1/telegram/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${PUZZLE_BOT_API_KEY}` },
-      body: JSON.stringify({
-        chat_id: MY_PERSONAL_TG_ID,
-        text: orderText,
-        parse_mode: 'Markdown'
-      })
-    });
-
-    if (contactType === 'telegram') {
-      let clientText = `🙏 **Спасибо за заказ in Beijing Puff Market!**\n\nВот ваш электронный чек:\n\n` + orderText;
-      await fetch(`https://api.puzzlebot.top/api/v1/telegram/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${PUZZLE_BOT_API_KEY}` },
-        body: JSON.stringify({
-          username: tgUsername,
-          text: clientText,
-          parse_mode: 'Markdown'
-        })
-      });
-    }
-
-    alert('Заказ успешно отправлен!');
-    cart = [];
-    updateCartUI();
-    toggleCart();
-    loadProducts(); 
-  } catch (err) {
-    console.error(err);
-    alert('Заказ оформлен, но возникла ошибка при отправке сообщения в бот.');
-  }
-}
-
-loadProducts();
