@@ -1,7 +1,5 @@
-// --- ИНИЦИАЛИЗАЦИЯ (добавь свои переменные, если они были другие) ---
 let cart = [];
 
-// --- ФУНКЦИЯ ОТПРАВКИ (ТВОЯ НОВАЯ) ---
 async function placeOrder(event) {
   event.preventDefault();
   
@@ -47,11 +45,12 @@ async function placeOrder(event) {
     if (response.ok) {
       alert('Заказ успешно отправлен!');
       cart = [];
-      updateCartUI(); // ВОЗВРАЩАЕМ ЭТУ ФУНКЦИЮ
-      toggleCart();   // ВОЗВРАЩАЕМ ЭТУ ФУНКЦИЮ
+      updateCartUI();
+      toggleCart();
     } else {
       throw new Error('Ошибка сервера');
     }
+    
     btn.innerText = originalText;
   } catch (err) {
     console.error(err);
@@ -59,15 +58,12 @@ async function placeOrder(event) {
   }
 }
 
-// --- НЕОБХОДИМЫЕ ФУНКЦИИ ИНТЕРФЕЙСА (которые могли пропасть) ---
+// Убедись, что эти функции у тебя есть в проекте!
+// Если их нет, добавь их код ниже, иначе после заказа корзина не очистится.
 function updateCartUI() {
-  // Твой старый код обновления корзины (добавь его сюда, если он другой)
   console.log("Корзина обновлена");
 }
 
 function toggleCart() {
-  // Твой старый код открытия/закрытия корзины
-  console.log("Корзина переключена");
+  console.log("Корзина скрыта");
 }
-
-// Если у тебя были функции addToCart или другие — их тоже нужно вернуть в этот файл!
