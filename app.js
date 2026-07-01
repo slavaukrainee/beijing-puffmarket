@@ -3,7 +3,6 @@ const SUPABASE_KEY = 'sb_publishable_du2PviAhyWt6Gx0iWgKMqw_UUC1BZiH';
 const PUZZLE_BOT_API_KEY = '8940120225:AAHONShsV1iwDRYIiqciNovNQoB4OyvFqhQ'; 
 const MY_PERSONAL_TG_ID = '1625251103';
 
-// Инициализация базы данных под уникальным именем, чтобы не было конфликта
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let products = [];
@@ -16,7 +15,18 @@ async function loadProducts() {
     console.error('Ошибка загрузки данных:', error);
     return;
   }
-  products = data;
+  
+  // Автоматически разделяем "Бренд - Вкус" из твоей базы данных
+  products = data.map(p => {
+    const fullTitle = p.title || p.name || 'Товар - Без вкуса';
+    const parts = fullTitle.split(' - ');
+    return {
+      ...p,
+      displayName: parts[0] ? parts[0].trim() : 'Товар',
+      displayFlavor: parts[1] ? parts[1].trim() : 'Оригинальный'
+    };
+  });
+
   renderProducts();
 }
 
@@ -27,10 +37,10 @@ function renderProducts() {
 
   const grouped = {};
   products.forEach(p => {
-    if (!grouped[p.name]) {
-      grouped[p.name] = [];
+    if (!grouped[p.displayName]) {
+      grouped[p.displayName] = [];
     }
-    grouped[p.name].push(p);
+    grouped[p.displayName].push(p);
   });
 
   Object.keys(grouped).forEach(modelName => {
@@ -40,7 +50,7 @@ function renderProducts() {
     let optionsHtml = '';
     variants.forEach(v => {
       const outOfStock = v.stock <= 0 ? ' (Нет в наличии)' : '';
-      optionsHtml += `<option value="${v.id}" ${v.stock <= 0 ? 'disabled' : ''}>${v.flavor}${outOfStock}</option>`;
+      optionsHtml += `<option value="${v.id}" ${v.stock <= 0 ? 'disabled' : ''}>${v.displayFlavor}${outOfStock}</option>`;
     });
 
     const card = document.createElement('div');
@@ -121,8 +131,8 @@ function updateCartUI() {
     row.className = 'flex justify-between items-center bg-cyber-bg p-3 rounded border border-cyber-border';
     row.innerHTML = `
       <div>
-        <div class="font-bold text-cyber-text">${item.name}</div>
-        <div class="text-xs text-cyber-neon">Вкус: ${item.flavor}</div>
+        <div class="font-bold text-cyber-text">${item.displayName}</div>
+        <div class="text-xs text-cyber-neon">Вкус: ${item.displayFlavor}</div>
         <div class="text-xs text-cyber-muted">${item.price} ¥ × ${item.quantity} шт.</div>
       </div>
       <div class="flex items-center gap-2">
@@ -182,26 +192,24 @@ async function placeOrder(event) {
     return;
   }
 
-  // Проверка остатков на складе
   for (const item of cart) {
     const { data: product, error } = await supabaseClient
       .from('products')
-      .select('stock, name, flavor')
+      .select('stock')
       .eq('id', item.id)
       .single();
 
     if (error || !product) {
-      alert(`Ошибка при верификации товара ${item.name}`);
+      alert(`Ошибка при верификации товара`);
       return;
     }
 
     if (product.stock < item.quantity) {
-      alert(`Ошибка! Товар "${product.name}" со вкусом "${product.flavor}" раскупили. Доступно: ${product.stock} шт.`);
+      alert(`Ошибка! Товар со вкусом "${item.displayFlavor}" раскупили. Доступно: ${product.stock} шт.`);
       return;
     }
   }
 
-  // Обновление остатков на складе
   for (const item of cart) {
     const { data: product } = await supabaseClient.from('products').select('stock').eq('id', item.id).single();
     await supabaseClient.from('products').update({ stock: product.stock - item.quantity }).eq('id', item.id);
@@ -209,7 +217,6 @@ async function placeOrder(event) {
 
   const totalPrice = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   
-  // Создание записи в таблице заказов
   await supabaseClient.from('orders').insert([{ 
     items: cart, 
     total: totalPrice, 
@@ -221,12 +228,11 @@ async function placeOrder(event) {
   orderText += `👤 **Клиент:** ${clientContact}\n\n`;
   orderText += `📦 **Выбранные позиции:**\n`;
   cart.forEach(item => {
-    orderText += `• ${item.name} (Вкус: ${item.flavor}) — ${item.quantity} шт. (${item.price * item.quantity} ¥)\n`;
+    orderText += `• ${item.displayName} (Вкус: ${item.displayFlavor}) — ${item.quantity} шт. (${item.price * item.quantity} ¥)\n`;
   });
   orderText += `\n💰 **Итого к оплате:** ${totalPrice} ¥\n`;
 
   try {
-    // Отправка админу
     await fetch(`https://api.puzzlebot.top/api/v1/telegram/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${PUZZLE_BOT_API_KEY}` },
@@ -237,9 +243,8 @@ async function placeOrder(event) {
       })
     });
 
-    // Отправка чека клиенту
     if (contactType === 'telegram') {
-      let clientText = `🙏 **Спасибо за заказ в Beijing Puff Market!**\n\nВот ваш электронный чек:\n\n` + orderText;
+      let clientText = `🙏 **Спасибо за заказ in Beijing Puff Market!**\n\nВот ваш электронный чек:\n\n` + orderText;
       await fetch(`https://api.puzzlebot.top/api/v1/telegram/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${PUZZLE_BOT_API_KEY}` },
