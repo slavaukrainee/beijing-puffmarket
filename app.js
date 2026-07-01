@@ -31,12 +31,12 @@ async function placeOrder(event) {
     const originalText = btn.innerText;
     btn.innerText = 'Отправка...';
     
-    // Тот самый кусок, который теперь идет к нашей функции Netlify:
-    const response = await fetch(`/.netlify/functions/sendOrder`, {
+    // ОТПРАВКА НА СЕРВЕРНУЮ ФУНКЦИЮ (без CORS)
+    const response = await fetch('/.netlify/functions/sendorder', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        chat_id: 'ВАШ_TELEGRAM_ID', // Вставь сюда свой ID цифрами (например, '12345678')
+        chat_id: '8940120225', 
         text: orderText
       })
     });
@@ -53,6 +53,6 @@ async function placeOrder(event) {
     btn.innerText = originalText;
   } catch (err) {
     console.error(err);
-    alert('Ошибка при отправке уведомления. Проверьте консоль F12.');
+    alert('Ошибка при отправке: ' + err.message);
   }
 }
