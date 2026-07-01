@@ -1,4 +1,3 @@
-// === ИСПРАВЛЕННАЯ ФУНКЦИЯ ЗАКАЗА В app.js ===
 async function placeOrder(event) {
   event.preventDefault();
   
@@ -17,10 +16,8 @@ async function placeOrder(event) {
     return;
   }
 
-  // Расчет суммы
   const totalPrice = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   
-  // Формируем текст сообщения
   let orderText = "НОВЫЙ ЗАКАЗ С САЙТА!\n\n";
   orderText += "Клиент: " + clientContact + "\n\n";
   orderText += "Выбранные позиции:\n";
@@ -34,12 +31,12 @@ async function placeOrder(event) {
     const originalText = btn.innerText;
     btn.innerText = 'Отправка...';
     
-    // ОТПРАВЛЯЕМ ЗАПРОС НА НАШУ СЕРВЕРНУЮ ФУНКЦИЮ (вместо прямого API)
+    // Тот самый кусок, который теперь идет к нашей функции Netlify:
     const response = await fetch(`/.netlify/functions/sendOrder`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        chat_id: MY_PERSONAL_TG_ID,
+        chat_id: 'ВАШ_TELEGRAM_ID', // Вставь сюда свой ID цифрами (например, '12345678')
         text: orderText
       })
     });
@@ -56,6 +53,6 @@ async function placeOrder(event) {
     btn.innerText = originalText;
   } catch (err) {
     console.error(err);
-    alert('Ошибка при отправке уведомления, но заказ зафиксирован в базе.');
+    alert('Ошибка при отправке уведомления. Проверьте консоль F12.');
   }
 }
