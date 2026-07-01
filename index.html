@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Beijing Puff Market – Cyber Vape Store</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            cyber: {
+              bg: '#0a0a0f',
+              panel: '#12121a',
+              border: '#1e3a8f',
+              neon: '#00ff88',
+              neonDim: '#00cc6a',
+              magenta: '#ff00aa',
+              text: '#e0ffe8',
+              muted: '#6b8f7a'
+            }
+          },
+          fontFamily: {
+            display: ['Orbitron', 'sans-serif'],
+            body: ['Rajdhani', 'sans-serif']
+          }
+        }
+      }
+    }
+  </script>
+  <!-- Подключаем Supabase -->
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=Rajdhani:wght@500;600&display=swap" rel="stylesheet">
+  <style>
+    body { background-color: #0a0a0f; color: #e0ffe8; font-family: 'Rajdhani', sans-serif; }
+    .neon-border { box-shadow: 0 0 15px rgba(0, 255, 136, 0.2), inset 0 0 15px rgba(0, 255, 136, 0.1); border: 1px solid #00ff88; }
+    .neon-text { text-shadow: 0 0 8px rgba(0, 255, 136, 0.6); }
+    .cyber-btn { background: linear-gradient(135deg, #00ff88 0%, #00cc6a 100%); color: #0a0a0f; font-weight: bold; transition: all 0.3s; }
+    .cyber-btn:hover { box-shadow: 0 0 20px rgba(0, 255, 136, 0.6); transform: scale(1.02); }
+  </style>
+</head>
+<body class="p-4 md:p-8">
+
+  <!-- Шапка -->
+  <header class="max-w-6xl mx-auto mb-8 flex justify-between items-center border-b border-cyber-border pb-4">
+    <h1 class="text-2xl md:text-4xl font-display uppercase tracking-widest neon-text text-cyber-neon">Beijing Puff Market</h1>
+    <button onclick="toggleCart()" class="relative border border-cyber-neon px-4 py-2 rounded text-cyber-neon font-bold uppercase tracking-wider hover:bg-cyber-neon hover:text-cyber-bg transition">
+      🛒 Корзина (<span id="cart-count">0</span>)
+    </button>
+  </header>
+
+  <!-- Каталог товаров -->
+  <main class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6" id="products-container">
+    <!-- Сюда JS вставит сгруппированные карточки -->
+  </main>
+
+  <!-- Модалка корзины и оформления -->
+  <div id="cart-modal" class="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-cyber-panel border neon-border w-full max-w-lg rounded-lg p-6 max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-center mb-4 border-b border-cyber-border pb-2">
+        <h2 class="text-xl font-display uppercase text-cyber-neon">Ваш заказ</h2>
+        <button onclick="toggleCart()" class="text-cyber-muted hover:text-cyber-magenta text-xl">✕</button>
+      </div>
+
+      <!-- Список товаров в корзине -->
+      <div id="cart-items" class="space-y-4 mb-6"></div>
+
+      <div class="flex justify-between items-center font-bold text-lg mb-6 border-t border-cyber-border pt-4">
+        <span>ИТОГО:</span>
+        <span class="text-cyber-neon text-xl"><span id="cart-total">0</span> ¥</span>
+      </div>
+
+      <!-- Форма заказа -->
+      <form id="order-form" onsubmit="placeOrder(event)" class="space-y-4">
+        <div>
+          <label class="block text-sm uppercase tracking-wider text-cyber-muted mb-1">Способ связи</label>
+          <select id="contact-type" class="w-full bg-cyber-bg border border-cyber-border p-2 rounded text-cyber-text focus:outline-none focus:border-cyber-neon" onchange="toggleContactFields()">
+            <option value="telegram">Telegram</option>
+            <option value="wechat">WeChat</option>
+          </select>
+        </div>
+
+        <!-- Поле для Telegram -->
+        <div id="tg-field">
+          <label class="block text-sm uppercase tracking-wider text-cyber-muted mb-1">Ваш @username в Telegram</label>
+          <input type="text" id="tg-username" class="w-full bg-cyber-bg border border-cyber-border p-2 rounded text-cyber-text focus:outline-none focus:border-cyber-neon" placeholder="username (без знака @)">
+        </div>
+
+        <!-- Поле для WeChat -->
+        <div id="wechat-field" class="hidden">
+          <label class="block text-sm uppercase tracking-wider text-cyber-muted mb-1">Ваш WeChat ID</label>
+          <input type="text" id="wechat-id" class="w-full bg-cyber-bg border border-cyber-border p-2 rounded text-cyber-text focus:outline-none focus:border-cyber-neon" placeholder="Введите ваш WeChat ID">
+        </div>
+
+        <button type="submit" class="w-full cyber-btn py-3 rounded uppercase tracking-widest font-display mt-4">
+          Подтвердить и заказать
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
