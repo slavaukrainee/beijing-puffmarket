@@ -1,6 +1,8 @@
 export default async (req) => {
+  // Получаем данные из запроса от сайта
   const body = await req.json();
   
+  // Отправляем запрос в PuzzleBot
   const response = await fetch('https://api.puzzlebot.top/api/v1/telegram/sendMessage', {
     method: 'POST',
     headers: { 

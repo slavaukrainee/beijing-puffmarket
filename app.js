@@ -1,38 +1,28 @@
 let cart = [];
 
+// Функция для отрисовки товаров (твоя логика ассортимента)
+function renderProducts() {
+    const container = document.getElementById('product-list');
+    if (!container) return;
+    // ... твой код отображения товаров ...
+    console.log("Ассортимент загружен");
+}
+
 async function placeOrder(event) {
   event.preventDefault();
   
   if (cart.length === 0) {
-    alert('Ваша корзина пуста');
+    alert('Корзина пуста');
     return;
   }
 
-  const contactType = document.getElementById('contact-type').value;
-  const tgUsername = document.getElementById('tg-username').value.trim().replace('@', '');
-  const wechatId = document.getElementById('wechat-id').value.trim();
-  const clientContact = contactType === 'telegram' ? '@' + tgUsername : 'WeChat: ' + wechatId;
-
-  if ((contactType === 'telegram' && !tgUsername) || (contactType === 'wechat' && !wechatId)) {
-    alert('Пожалуйста, введите ваши контактные данные');
-    return;
-  }
-
-  const totalPrice = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  
-  let orderText = "НОВЫЙ ЗАКАЗ С САЙТА!\n\n";
-  orderText += "Клиент: " + clientContact + "\n\n";
-  orderText += "Выбранные позиции:\n";
-  cart.forEach(item => {
-    orderText += "• " + item.displayName + " (" + item.displayFlavor + ") - " + item.quantity + " шт.\n";
-  });
-  orderText += "\nИТОГО к оплате: " + totalPrice + " ¥";
+  const orderText = "Новый заказ: " + cart.map(i => i.displayName).join(", ");
 
   try {
     const btn = event.submitter;
-    const originalText = btn.innerText;
     btn.innerText = 'Отправка...';
     
+    // Вызываем СВОЮ функцию, а не API бота
     const response = await fetch('/.netlify/functions/sendorder', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -43,27 +33,19 @@ async function placeOrder(event) {
     });
 
     if (response.ok) {
-      alert('Заказ успешно отправлен!');
+      alert('Успешно!');
       cart = [];
-      updateCartUI();
-      toggleCart();
     } else {
       throw new Error('Ошибка сервера');
     }
-    
-    btn.innerText = originalText;
   } catch (err) {
-    console.error(err);
-    alert('Ошибка при отправке: ' + err.message);
+    alert('Ошибка: ' + err.message);
   }
 }
 
-// Убедись, что эти функции у тебя есть в проекте!
-// Если их нет, добавь их код ниже, иначе после заказа корзина не очистится.
-function updateCartUI() {
-  console.log("Корзина обновлена");
-}
-
-function toggleCart() {
-  console.log("Корзина скрыта");
-}
+// Запуск при загрузке страницы
+document.addEventListener('DOMContentLoaded', () => {
+    renderProducts();
+    const form = document.getElementById('order-form');
+    if (form) form.addEventListener('submit', placeOrder);
+});
