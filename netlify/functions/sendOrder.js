@@ -1,113 +1,73 @@
-// netlify/functions/sendorder.js
-// Серверная функция для обхода CORS: принимает заказ с фронтенда
-// и пересылает его в Puzzlebot API.
-
-const PUZZLEBOT_TOKEN = "8940120225:AAHONShsV1iwDRYIiqciNovNQoB4OyvFqhQ";
-const PUZZLEBOT_URL = "https://api.puzzlebot.top/api/v1/telegram/sendMessage";
-
 exports.handler = async function (event) {
-  // Разрешаем CORS-preflight (на случай, если фронтенд шлёт OPTIONS)
-  if (event.httpMethod === "OPTIONS") {
-    return {
-      statusCode: 200,
-      headers: corsHeaders(),
-      body: "",
-    };
-  }
-
-  if (event.httpMethod !== "POST") {
+  if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
-      headers: corsHeaders(),
-      body: JSON.stringify({ ok: false, error: "Method Not Allowed" }),
+      body: JSON.stringify({ error: 'Method Not Allowed' }),
     };
   }
 
   let payload;
   try {
-    payload = JSON.parse(event.body || "{}");
+    payload = JSON.parse(event.body);
   } catch (err) {
     return {
       statusCode: 400,
-      headers: corsHeaders(),
-      body: JSON.stringify({ ok: false, error: "Invalid JSON body" }),
+      body: JSON.stringify({ error: 'Invalid JSON body' }),
     };
   }
 
-  const { chat_id, text } = payload;
-
-  if (!chat_id || !text) {
+  const text = (payload && payload.text) ? String(payload.text) : '';
+  if (!text.trim()) {
     return {
       statusCode: 400,
-      headers: corsHeaders(),
-      body: JSON.stringify({
-        ok: false,
-        error: "Missing required fields: chat_id and text",
-      }),
+      body: JSON.stringify({ error: 'Missing "text" field' }),
+    };
+  }
+
+  const PUZZLEBOT_URL = 'https://api.puzzlebot.top/api/v1/telegram/sendMessage';
+  const PUZZLEBOT_TOKEN = process.env.PUZZLEBOT_TOKEN;
+  const PUZZLEBOT_CHAT_ID = process.env.PUZZLEBOT_CHAT_ID || '8940120225';
+
+  if (!PUZZLEBOT_TOKEN) {
+    console.error('Missing PUZZLEBOT_TOKEN env variable');
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: 'Server misconfiguration' }),
     };
   }
 
   try {
     const response = await fetch(PUZZLEBOT_URL, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
         Authorization: `Bearer ${PUZZLEBOT_TOKEN}`,
       },
       body: JSON.stringify({
-        chat_id: chat_id,
-        text: text,
+        chat_id: PUZZLEBOT_CHAT_ID,
+        text,
       }),
     });
 
-    const contentType = response.headers.get("content-type") || "";
-    let responseData;
-
-    if (contentType.includes("application/json")) {
-      responseData = await response.json();
-    } else {
-      responseData = { raw: await response.text() };
-    }
+    const responseData = await response.text();
 
     if (!response.ok) {
+      console.error('Puzzlebot API error:', responseData);
       return {
-        statusCode: response.status,
-        headers: corsHeaders(),
-        body: JSON.stringify({
-          ok: false,
-          error: "Puzzlebot API error",
-          details: responseData,
-        }),
+        statusCode: 502,
+        body: JSON.stringify({ error: 'Failed to send Telegram message', details: responseData }),
       };
     }
 
     return {
       statusCode: 200,
-      headers: corsHeaders(),
-      body: JSON.stringify({
-        ok: true,
-        message: "Order sent successfully",
-        puzzlebotResponse: responseData,
-      }),
+      body: JSON.stringify({ success: true }),
     };
   } catch (err) {
+    console.error('sendorder function error:', err);
     return {
       statusCode: 500,
-      headers: corsHeaders(),
-      body: JSON.stringify({
-        ok: false,
-        error: "Internal server error",
-        details: err.message,
-      }),
+      body: JSON.stringify({ error: 'Internal Server Error' }),
     };
   }
 };
-
-function corsHeaders() {
-  return {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "Content-Type",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Content-Type": "application/json",
-  };
-}
