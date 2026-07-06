@@ -88,9 +88,19 @@ async function decrementStock(items) {
   if (!Array.isArray(items)) return;
   for (const item of items) {
     if (!item.id) continue;
-    const rows = await supabaseGet(`products?id=eq.${item.id}&select=stock&limit=1`);
-    if (!rows?.[0] || rows[0].stock == null) continue;
-    const next = Math.max(0, Number(rows[0].stock) - (Number(item.quantity) || 0));
+    const rows = await supabaseGet(`warehouse_stock?product_id=eq.${item.id}&select=quantity&limit=1`);
+    let current = rows?.[0]?.quantity;
+    if (current == null) {
+      const prod = await supabaseGet(`products?id=eq.${item.id}&select=stock&limit=1`);
+      if (prod?.[0]?.stock == null) continue;
+      current = prod[0].stock;
+    }
+    const next = Math.max(0, Number(current) - (Number(item.quantity) || 0));
+    await supabaseRequest('warehouse_stock', {
+      method: 'POST',
+      headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({ product_id: item.id, quantity: next }),
+    }).catch(() => {});
     for (const body of [{ stock: next, is_available: next > 0 }, { stock: next }]) {
       if (await supabaseRequest(`products?id=eq.${item.id}`, { method: 'PATCH', body: JSON.stringify(body) })) break;
     }
@@ -123,7 +133,6 @@ export async function handleSendOrder(payload) {
 
   if (order) {
     await trySaveOrder(order, text).catch(() => {});
-    await decrementStock(order.items).catch(() => {});
   }
 
   return {

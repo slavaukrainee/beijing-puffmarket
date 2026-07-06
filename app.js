@@ -102,6 +102,41 @@ function applyStockCache(list) {
   });
 }
 
+async function syncWarehouseStockFromDb() {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/warehouse_stock?select=product_id,quantity`, {
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+    });
+    if (!res.ok) return;
+    const rows = await res.json();
+    if (!Array.isArray(rows) || !rows.length) return;
+    const cache = getStockCache();
+    rows.forEach((row) => {
+      cache[String(row.product_id)] = Math.max(0, Number(row.quantity) || 0);
+    });
+    localStorage.setItem(STOCK_CACHE_KEY, JSON.stringify(cache));
+  } catch (_) {}
+}
+
+async function persistWarehouseStock(productId, quantity) {
+  const stock = Math.max(0, Number(quantity) || 0);
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/warehouse_stock`, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'resolution=merge-duplicates,return=minimal',
+      },
+      body: JSON.stringify({ product_id: productId, quantity: stock }),
+    });
+  } catch (_) {}
+}
+
 const supabaseClient = createSupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const i18n = {
@@ -321,6 +356,7 @@ async function loadProducts() {
       return;
     }
 
+    await syncWarehouseStockFromDb();
     products = applyStockCache(data || []);
     show(grid);
     renderProducts();
@@ -340,6 +376,7 @@ async function reloadProductsForStock() {
     console.error('Stock products load error:', error);
     return false;
   }
+  await syncWarehouseStockFromDb();
   products = applyStockCache(data || []);
   return true;
 }
@@ -759,8 +796,10 @@ async function submitOrder(e) {
   submitBtn.disabled = false;
   submitBtn.textContent = t('place_order');
 
-  for (const item of cart) {
-    await saveProductStock(item.id, Math.max(0, productStock(item) - item.quantity));
+  const orderedItems = cart.map((item) => ({ id: item.id, quantity: item.quantity }));
+  for (const item of orderedItems) {
+    const current = productStock({ id: item.id });
+    await saveProductStock(item.id, Math.max(0, current - item.quantity), { skipRender: true });
   }
 
   cart = [];
@@ -985,7 +1024,7 @@ function groupForStock(list) {
   return Array.from(groups.values()).sort((a, b) => a.model.localeCompare(b.model, 'ru'));
 }
 
-function renderStockRows(containerId, list, onSave) {
+function renderStockRows(containerId, list) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
@@ -1036,22 +1075,29 @@ function renderStockRows(containerId, list, onSave) {
         </table>
       </section>`;
   }).join('');
+}
 
-  async function adjustStock(productId, delta) {
-    const input = container.querySelector(`.stk-input[data-id="${productId}"]`);
-    const display = container.querySelector(`.stk-display[data-id="${productId}"]`);
-    if (!input || !display) return;
-    const next = Math.max(0, Number(input.value) + delta);
-    input.value = next;
-    display.textContent = next;
-    if (onSave) onSave();
-  }
+function adjustStockInContainer(container, productId, delta) {
+  const input = container.querySelector(`.stk-input[data-id="${productId}"]`);
+  const display = container.querySelector(`.stk-display[data-id="${productId}"]`);
+  if (!input || !display) return;
+  const next = Math.max(0, Number(input.value) + delta);
+  input.value = String(next);
+  display.textContent = String(next);
+  const row = input.closest('tr');
+  if (row) row.classList.toggle('opacity-50', next <= 0);
+}
 
-  container.querySelectorAll('.stk-minus').forEach((btn) => {
-    btn.addEventListener('click', () => adjustStock(btn.dataset.id, -1));
-  });
-  container.querySelectorAll('.stk-plus').forEach((btn) => {
-    btn.addEventListener('click', () => adjustStock(btn.dataset.id, 1));
+function bindStockContainer(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container || container.dataset.stockBound === '1') return;
+  container.dataset.stockBound = '1';
+  container.addEventListener('click', (e) => {
+    const btn = e.target.closest('.stk-minus, .stk-plus');
+    if (!btn) return;
+    e.preventDefault();
+    const delta = btn.classList.contains('stk-minus') ? -1 : 1;
+    adjustStockInContainer(container, btn.dataset.id, delta);
   });
 }
 
@@ -1067,6 +1113,8 @@ async function saveProductStock(productId, value, opts = {}) {
   }
   if (!opts.skipRender) renderProducts();
 
+  await persistWarehouseStock(productId, stock);
+
   const attempts = [{ stock, is_available }, { stock }, { is_available }];
   for (const payload of attempts) {
     const { error } = await supabaseClient.from('products').update(payload).eq('id', productId);
@@ -1077,10 +1125,7 @@ async function saveProductStock(productId, value, opts = {}) {
 }
 
 function renderAdminStock() {
-  renderStockRows('admin-stock-groups', products, () => {
-    renderAdminStock();
-    renderProducts();
-  });
+  renderStockRows('admin-stock-groups', products);
 }
 
 function showAdminTab(tab) {
@@ -1138,7 +1183,7 @@ function renderStockPage() {
     const { model, flavor } = splitNameForStock(p);
     return model.toLowerCase().includes(q) || flavor.toLowerCase().includes(q);
   });
-  renderStockRows('stock-groups', list, () => renderStockPage());
+  renderStockRows('stock-groups', list);
 }
 
 async function stockLogin() {
@@ -1200,6 +1245,8 @@ function initEventListeners() {
   document.getElementById('stock-search').addEventListener('input', renderStockPage);
   document.getElementById('stock-save-btn')?.addEventListener('click', () => saveAllStockFromContainer('stock-groups'));
   document.getElementById('admin-stock-save-btn')?.addEventListener('click', () => saveAllStockFromContainer('admin-stock-groups'));
+  bindStockContainer('stock-groups');
+  bindStockContainer('admin-stock-groups');
 
   if (location.hash === '#stock') openStockPage();
   window.addEventListener('hashchange', () => {
