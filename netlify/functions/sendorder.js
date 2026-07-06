@@ -36,10 +36,11 @@ async function findChatIdByUsername(username) {
   }
 
   const legacy = await supabaseRequest(
-    `orders?contact=eq.${encodeURIComponent(`telegram:@${key}`)}&status=eq.bot_user&select=client&order=updated_at.desc&limit=1`
+    `orders?contact_type=eq.bot_user&contact=eq.${encodeURIComponent(key)}&select=items&order=id.desc&limit=1`
   );
-  if (legacy.ok && Array.isArray(legacy.data) && legacy.data[0]?.client) {
-    return legacy.data[0].client;
+  if (legacy.ok && Array.isArray(legacy.data) && legacy.data[0]?.items) {
+    const meta = legacy.data[0].items.find((item) => item && item.chat_id);
+    if (meta?.chat_id) return meta.chat_id;
   }
 
   return null;

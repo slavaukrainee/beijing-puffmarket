@@ -57,12 +57,10 @@ exports.handler = async function (event) {
         Prefer: 'return=minimal',
       },
       body: JSON.stringify({
-        client: String(user.id),
-        contact: username ? `telegram:@${username}` : `telegram:id:${user.id}`,
-        address: 'bot_registration',
+        items: [{ _bot_user: true, chat_id: user.id, username }],
         total: 0,
-        items: [],
-        status: 'bot_user',
+        contact: username || String(user.id),
+        contact_type: 'bot_user',
       }),
     }).catch(() => {});
   }

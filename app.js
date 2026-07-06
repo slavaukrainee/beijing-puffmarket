@@ -428,6 +428,70 @@ function setDeliveryMethod(method) {
   addressLabel.textContent = method === 'beijing' ? t('label_address') : t('label_address_other');
 }
 
+function showOrderError(message) {
+  const el = document.getElementById('order-error');
+  if (!el) return;
+  if (!message) {
+    el.textContent = '';
+    hide(el);
+    return;
+  }
+  el.textContent = message;
+  show(el);
+}
+
+async function saveOrderToSupabase(orderData) {
+  const {
+    name, contact, address, contactMethod, deliveryMethod, items, total,
+  } = orderData;
+
+  const contactValue = contactMethod === 'telegram'
+    ? contact.replace('@', '').trim()
+    : contact.trim();
+  const deliveryLabel = deliveryMethod === 'beijing' ? 'Beijing' : 'Other CN';
+  const enrichedItems = [
+    ...items,
+    {
+      _meta: true,
+      client: name || (lang === 'ru' ? 'Без имени' : 'Anonymous'),
+      address,
+      delivery: deliveryLabel,
+      contact_method: contactMethod,
+    },
+  ];
+
+  const attempts = [
+    {
+      items: enrichedItems,
+      total,
+      contact: contactValue,
+      contact_type: contactMethod,
+    },
+    {
+      items: enrichedItems,
+      total,
+      contact: `${contactMethod}:${contactValue}`,
+    },
+    {
+      items,
+      total,
+      contact: contactValue,
+    },
+  ];
+
+  let lastError = null;
+  for (const payload of attempts) {
+    const { error } = await supabaseClient.from('orders').insert([payload]);
+    if (!error) return { ok: true };
+    lastError = error;
+    if (!(error.message || '').includes('column') && !(error.message || '').includes('schema cache')) {
+      break;
+    }
+  }
+
+  return { ok: false, error: lastError };
+}
+
 async function submitOrder(e) {
   e.preventDefault();
 
@@ -440,6 +504,8 @@ async function submitOrder(e) {
 
   if (!contact || !address) return;
 
+  showOrderError('');
+
   const items = cart.map((item) => ({
     name: item.base_name
       ? `${item.base_name}${item.flavor ? ` — ${item.flavor}` : ''}`
@@ -448,28 +514,24 @@ async function submitOrder(e) {
     price: item.price,
   }));
 
-  const deliveryTag = deliveryMethod === 'beijing' ? 'Beijing' : 'Other CN';
-  const contactValue = contactMethod === 'telegram'
-    ? `@${contact.replace('@', '')}`
-    : contact;
-
-  const order = {
-    client: name || (lang === 'ru' ? 'Без имени' : 'Anonymous'),
-    contact: `${contactMethod}:${contactValue}`,
-    address: `[${deliveryTag}] ${address}`,
-    total: cartTotal(),
-    items,
-    status: 'new',
-  };
+  const clientName = name || (lang === 'ru' ? 'Без имени' : 'Anonymous');
 
   submitBtn.disabled = true;
   submitBtn.textContent = t('order_sending');
 
-  const { error } = await supabaseClient.from('orders').insert([order]);
+  const saveResult = await saveOrderToSupabase({
+    name: clientName,
+    contact,
+    address,
+    contactMethod,
+    deliveryMethod,
+    items,
+    total: cartTotal(),
+  });
 
-  if (error) {
-    console.error('Order error:', error);
-    alert(`${t('order_error')}\n${error.message || ''}`);
+  if (!saveResult.ok) {
+    console.error('Order error:', saveResult.error);
+    showOrderError(t('order_error'));
     submitBtn.disabled = false;
     submitBtn.textContent = t('place_order');
     return;
@@ -487,12 +549,12 @@ async function submitOrder(e) {
 
     const messageText =
       `🆕 НОВЫЙ ЗАКАЗ\n\n` +
-      `👤 Имя: ${order.client}\n` +
+      `👤 Имя: ${clientName}\n` +
       `💬 Связь (${contactLabel}): @${contact.replace('@', '')}\n` +
       `🚚 Доставка: ${deliveryLabel}\n` +
       `📍 Адрес: ${address}\n\n` +
       `🛒 Товары:\n${itemsText}\n\n` +
-      `💰 Итого: ¥${order.total}`;
+      `💰 Итого: ¥${cartTotal()}`;
 
     try {
       const resp = await fetch('/.netlify/functions/sendorder', {
@@ -508,11 +570,6 @@ async function submitOrder(e) {
       if (!resp.ok) {
         const errData = await resp.json().catch(() => ({}));
         console.error('Telegram notify failed:', errData);
-        alert(
-          lang === 'ru'
-            ? `Заказ сохранён, но Telegram: ${errData.error || 'ошибка отправки'}.\nСначала нажмите /start в боте и укажите тот же @username.`
-            : `Order saved, but Telegram failed: ${errData.error || 'send error'}.\nPress /start in the bot first and use the same @username.`
-        );
       } else {
         document.querySelector('#success-screen [data-i18n="success_msg"]').textContent = t('success_msg_tg');
       }
