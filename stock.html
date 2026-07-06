@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BP Market — Склад</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            cyber: {
+              bg: '#0a0a0f', panel: '#12121a', border: '#1e3a2f',
+              neon: '#00ff88', neonDim: '#00cc6a', text: '#e0ffe8', muted: '#6b8f7a',
+            }
+          },
+          fontFamily: { display: ['Orbitron', 'sans-serif'], body: ['Rajdhani', 'sans-serif'] },
+        }
+      }
+    }
+  </script>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Rajdhani', sans-serif; background: #0a0a0f; color: #e0ffe8; }
+    .hidden-view { display: none !important; }
+    input[type=number] { -moz-appearance: textfield; }
+    input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  </style>
+</head>
+<body class="min-h-screen">
+
+  <header class="border-b border-cyber-border bg-cyber-panel/90 sticky top-0 z-10">
+    <div class="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between gap-3">
+      <div>
+        <h1 class="font-display text-lg text-cyber-neon">📦 СКЛАД</h1>
+        <p class="text-xs text-cyber-muted">Beijing Puff Market — учёт остатков</p>
+      </div>
+      <a href="/" class="text-sm text-cyber-muted hover:text-cyber-neon">← На сайт</a>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-4 py-6">
+    <div id="login-screen" class="max-w-sm mx-auto mt-16">
+      <div class="bg-cyber-panel border border-cyber-border rounded-lg p-6">
+        <h2 class="font-display text-cyber-neon mb-4">Вход на склад</h2>
+        <input type="password" id="login-password" class="w-full bg-cyber-bg border border-cyber-border rounded px-4 py-3 mb-4" placeholder="Пароль">
+        <button id="login-btn" class="w-full py-3 bg-cyber-neon text-cyber-bg font-bold rounded">Войти</button>
+        <p id="login-error" class="hidden-view text-red-400 text-sm mt-3">Неверный пароль</p>
+      </div>
+    </div>
+
+    <div id="stock-app" class="hidden-view">
+      <div class="flex flex-col sm:flex-row gap-3 mb-6">
+        <input type="search" id="search-input" placeholder="Поиск по названию или вкусу..."
+          class="flex-1 bg-cyber-panel border border-cyber-border rounded px-4 py-2.5 text-sm">
+        <button id="refresh-btn" class="px-4 py-2.5 border border-cyber-border rounded hover:border-cyber-neon text-sm">Обновить</button>
+      </div>
+
+      <div id="stock-loading" class="text-center py-12 text-cyber-muted">Загрузка...</div>
+      <div id="stock-error" class="hidden-view text-center py-8 text-red-400"></div>
+      <div id="stock-groups" class="space-y-6"></div>
+
+      <p id="save-status" class="hidden-view fixed bottom-4 right-4 bg-cyber-panel border border-cyber-neon text-cyber-neon px-4 py-2 rounded shadow-lg text-sm"></p>
+    </div>
+  </main>
+
+  <script src="stock.js"></script>
+</body>
+</html>
