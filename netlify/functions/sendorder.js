@@ -1,44 +1,48 @@
-const fs = require('fs');
-const path = require('path');
-
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || process.env.PUZZLE_BOT_API_KEY || '8940120225:AAHONShsV1iwDRYIiqciNovNQoB4OyvFqhQ';
 const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID || '1625251103';
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://xtuzjkavnzxfqlyxfvas.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY || 'sb_publishable_du2PviAhyWt6Gx0iWgKMqw_UUC1BZiH';
 const API_BASE = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
-function readLocalUsers() {
+async function supabaseRequest(path, options = {}) {
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    ...options,
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${SUPABASE_KEY}`,
+      'Content-Type': 'application/json',
+      ...(options.headers || {}),
+    },
+  });
+  const text = await response.text();
+  let data = null;
   try {
-    const file = path.join(__dirname, '..', '..', 'data', 'bot_users.json');
-    return JSON.parse(fs.readFileSync(file, 'utf8'));
+    data = text ? JSON.parse(text) : null;
   } catch {
-    return {};
+    data = text;
   }
+  return { ok: response.ok, status: response.status, data };
 }
 
 async function findChatIdByUsername(username) {
   const key = String(username || '').replace('@', '').trim().toLowerCase();
   if (!key) return null;
 
-  try {
-    const url = `${SUPABASE_URL}/rest/v1/bot_users?username=eq.${encodeURIComponent(key)}&select=chat_id&limit=1`;
-    const response = await fetch(url, {
-      headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`,
-      },
-    });
-    if (response.ok) {
-      const rows = await response.json();
-      if (rows.length && rows[0].chat_id) return rows[0].chat_id;
-    }
-  } catch (err) {
-    console.error('Supabase bot_users lookup failed:', err.message);
+  const botUsers = await supabaseRequest(
+    `bot_users?username=eq.${encodeURIComponent(key)}&select=chat_id&limit=1`
+  );
+  if (botUsers.ok && Array.isArray(botUsers.data) && botUsers.data[0]?.chat_id) {
+    return botUsers.data[0].chat_id;
   }
 
-  const local = readLocalUsers();
-  const entry = local[key];
-  return entry && entry.chat_id ? entry.chat_id : null;
+  const legacy = await supabaseRequest(
+    `orders?contact=eq.${encodeURIComponent(`telegram:@${key}`)}&status=eq.bot_user&select=client&order=updated_at.desc&limit=1`
+  );
+  if (legacy.ok && Array.isArray(legacy.data) && legacy.data[0]?.client) {
+    return legacy.data[0].client;
+  }
+
+  return null;
 }
 
 async function tgRequest(method, body) {

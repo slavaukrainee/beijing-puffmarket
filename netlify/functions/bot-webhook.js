@@ -28,9 +28,11 @@ exports.handler = async function (event) {
 
   async function saveUser(user) {
     if (!user || !user.id) return;
+
+    const username = user.username ? user.username.toLowerCase() : null;
     const row = {
       chat_id: user.id,
-      username: user.username ? user.username.toLowerCase() : null,
+      username,
       first_name: user.first_name || null,
       updated_at: new Date().toISOString(),
     };
@@ -44,7 +46,25 @@ exports.handler = async function (event) {
         Prefer: 'resolution=merge-duplicates',
       },
       body: JSON.stringify(row),
-    }).catch((err) => console.error('saveUser error:', err.message));
+    }).catch(() => {});
+
+    await fetch(`${SUPABASE_URL}/rest/v1/orders`, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify({
+        client: String(user.id),
+        contact: username ? `telegram:@${username}` : `telegram:id:${user.id}`,
+        address: 'bot_registration',
+        total: 0,
+        items: [],
+        status: 'bot_user',
+      }),
+    }).catch(() => {});
   }
 
   const message = update.message;
