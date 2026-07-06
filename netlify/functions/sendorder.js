@@ -11,37 +11,39 @@ async function supabaseRequest(path, options = {}) {
       apikey: SUPABASE_KEY,
       Authorization: `Bearer ${SUPABASE_KEY}`,
       'Content-Type': 'application/json',
+      Prefer: 'return=minimal',
       ...(options.headers || {}),
     },
   });
-  const text = await response.text();
-  let data = null;
-  try {
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    data = text;
-  }
-  return { ok: response.ok, status: response.status, data };
+  return response.ok;
 }
 
 async function findChatIdByUsername(username) {
   const key = String(username || '').replace('@', '').trim().toLowerCase();
   if (!key) return null;
 
-  const botUsers = await supabaseRequest(
-    `bot_users?username=eq.${encodeURIComponent(key)}&select=chat_id&limit=1`
-  );
-  if (botUsers.ok && Array.isArray(botUsers.data) && botUsers.data[0]?.chat_id) {
-    return botUsers.data[0].chat_id;
-  }
+  try {
+    const botUsers = await fetch(
+      `${SUPABASE_URL}/rest/v1/bot_users?username=eq.${encodeURIComponent(key)}&select=chat_id&limit=1`,
+      { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+    );
+    if (botUsers.ok) {
+      const rows = await botUsers.json();
+      if (rows[0]?.chat_id) return rows[0].chat_id;
+    }
+  } catch (_) {}
 
-  const legacy = await supabaseRequest(
-    `orders?contact_type=eq.bot_user&contact=eq.${encodeURIComponent(key)}&select=items&order=id.desc&limit=1`
-  );
-  if (legacy.ok && Array.isArray(legacy.data) && legacy.data[0]?.items) {
-    const meta = legacy.data[0].items.find((item) => item && item.chat_id);
-    if (meta?.chat_id) return meta.chat_id;
-  }
+  try {
+    const legacy = await fetch(
+      `${SUPABASE_URL}/rest/v1/orders?contact_type=eq.bot_user&contact=eq.${encodeURIComponent(key)}&select=items&order=id.desc&limit=1`,
+      { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+    );
+    if (legacy.ok) {
+      const rows = await legacy.json();
+      const meta = rows[0]?.items?.find((item) => item && item.chat_id);
+      if (meta?.chat_id) return meta.chat_id;
+    }
+  } catch (_) {}
 
   return null;
 }
@@ -55,6 +57,38 @@ async function tgRequest(method, body) {
   const data = await response.json();
   if (!data.ok) throw new Error(data.description || `Telegram API error: ${method}`);
   return data.result;
+}
+
+async function trySaveOrder(order) {
+  const contactValue = order.contactMethod === 'telegram'
+    ? String(order.contact || '').replace('@', '').trim()
+    : String(order.contact || '').trim();
+
+  const payloads = [
+    {
+      items: order.items,
+      total: order.total,
+      contact: contactValue,
+      contact_type: order.contactMethod,
+    },
+    {
+      items: order.items,
+      total: order.total,
+      contact: contactValue,
+    },
+    {
+      items: JSON.stringify(order.items),
+      total: order.total,
+      contact: contactValue,
+    },
+  ];
+
+  for (const payload of payloads) {
+    if (await supabaseRequest('orders', { method: 'POST', body: JSON.stringify(payload) })) {
+      return true;
+    }
+  }
+  return false;
 }
 
 exports.handler = async function (event) {
@@ -74,32 +108,45 @@ exports.handler = async function (event) {
   const telegramUsername = payload && payload.telegram_username
     ? String(payload.telegram_username).replace('@', '').trim()
     : '';
+  const order = payload && payload.order ? payload.order : null;
 
   if (!text) {
     return { statusCode: 400, body: JSON.stringify({ error: 'Missing "text" field' }) };
   }
 
-  if (contactMethod !== 'telegram') {
-    return { statusCode: 200, body: JSON.stringify({ success: true, skipped: true }) };
-  }
-
   try {
     await tgRequest('sendMessage', { chat_id: ADMIN_CHAT_ID, text });
 
-    const clientChatId = await findChatIdByUsername(telegramUsername);
-    if (!clientChatId) {
-      return {
-        statusCode: 502,
-        body: JSON.stringify({
-          error: `Клиент @${telegramUsername} не найден. Нужно нажать /start в боте.`,
-        }),
-      };
+    let clientNotified = false;
+    if (contactMethod === 'telegram' && telegramUsername) {
+      const clientChatId = await findChatIdByUsername(telegramUsername);
+      if (clientChatId) {
+        const clientText = `🙏 Спасибо за заказ в Beijing Puff Market!\n\nВот ваш чек:\n\n${text}`;
+        await tgRequest('sendMessage', { chat_id: clientChatId, text: clientText });
+        clientNotified = true;
+      }
     }
 
-    const clientText = `🙏 Спасибо за заказ в Beijing Puff Market!\n\nВот ваш чек:\n\n${text}`;
-    await tgRequest('sendMessage', { chat_id: clientChatId, text: clientText });
+    let savedToDb = false;
+    if (order) {
+      try {
+        savedToDb = await trySaveOrder(order);
+      } catch (err) {
+        console.error('Supabase save skipped:', err.message);
+      }
+    }
 
-    return { statusCode: 200, body: JSON.stringify({ success: true }) };
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        success: true,
+        clientNotified,
+        savedToDb,
+        hint: contactMethod === 'telegram' && !clientNotified
+          ? 'Admin notified. Client: press /start in bot and use same @username.'
+          : null,
+      }),
+    };
   } catch (err) {
     console.error('sendorder function error:', err);
     return { statusCode: 502, body: JSON.stringify({ error: err.message }) };

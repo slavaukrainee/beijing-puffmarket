@@ -440,58 +440,6 @@ function showOrderError(message) {
   show(el);
 }
 
-async function saveOrderToSupabase(orderData) {
-  const {
-    name, contact, address, contactMethod, deliveryMethod, items, total,
-  } = orderData;
-
-  const contactValue = contactMethod === 'telegram'
-    ? contact.replace('@', '').trim()
-    : contact.trim();
-  const deliveryLabel = deliveryMethod === 'beijing' ? 'Beijing' : 'Other CN';
-  const enrichedItems = [
-    ...items,
-    {
-      _meta: true,
-      client: name || (lang === 'ru' ? 'Без имени' : 'Anonymous'),
-      address,
-      delivery: deliveryLabel,
-      contact_method: contactMethod,
-    },
-  ];
-
-  const attempts = [
-    {
-      items: enrichedItems,
-      total,
-      contact: contactValue,
-      contact_type: contactMethod,
-    },
-    {
-      items: enrichedItems,
-      total,
-      contact: `${contactMethod}:${contactValue}`,
-    },
-    {
-      items,
-      total,
-      contact: contactValue,
-    },
-  ];
-
-  let lastError = null;
-  for (const payload of attempts) {
-    const { error } = await supabaseClient.from('orders').insert([payload]);
-    if (!error) return { ok: true };
-    lastError = error;
-    if (!(error.message || '').includes('column') && !(error.message || '').includes('schema cache')) {
-      break;
-    }
-  }
-
-  return { ok: false, error: lastError };
-}
-
 async function submitOrder(e) {
   e.preventDefault();
 
@@ -515,67 +463,67 @@ async function submitOrder(e) {
   }));
 
   const clientName = name || (lang === 'ru' ? 'Без имени' : 'Anonymous');
+  const total = cartTotal();
+  const contactLabel = contactMethod === 'telegram' ? 'Telegram' : 'WeChat';
+  const deliveryLabel = deliveryMethod === 'beijing'
+    ? (lang === 'ru' ? 'Доставка по Пекину' : 'Beijing delivery')
+    : (lang === 'ru' ? 'Доставка по Китаю (СДЭК/почта)' : 'China delivery (SDEK/post)');
+
+  const itemsText = items
+    .map((it) => `• ${it.name} x${it.quantity} — ¥${it.price * it.quantity}`)
+    .join('\n');
+
+  const messageText =
+    `🆕 НОВЫЙ ЗАКАЗ\n\n` +
+    `👤 Имя: ${clientName}\n` +
+    `💬 Связь (${contactLabel}): ${contactMethod === 'telegram' ? '@' + contact.replace('@', '') : contact}\n` +
+    `🚚 Доставка: ${deliveryLabel}\n` +
+    `📍 Адрес: ${address}\n\n` +
+    `🛒 Товары:\n${itemsText}\n\n` +
+    `💰 Итого: ¥${total}`;
 
   submitBtn.disabled = true;
   submitBtn.textContent = t('order_sending');
 
-  const saveResult = await saveOrderToSupabase({
-    name: clientName,
-    contact,
-    address,
-    contactMethod,
-    deliveryMethod,
-    items,
-    total: cartTotal(),
-  });
+  try {
+    const resp = await fetch('/.netlify/functions/sendorder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: messageText,
+        contact_method: contactMethod,
+        telegram_username: contact.replace('@', ''),
+        order: {
+          items,
+          total,
+          contact,
+          contactMethod,
+          name: clientName,
+          address,
+          deliveryMethod,
+        },
+      }),
+    });
 
-  if (!saveResult.ok) {
-    console.error('Order error:', saveResult.error);
+    const data = await resp.json().catch(() => ({}));
+
+    if (!resp.ok) {
+      console.error('Order send failed:', data);
+      showOrderError(t('order_error'));
+      submitBtn.disabled = false;
+      submitBtn.textContent = t('place_order');
+      return;
+    }
+
+    if (contactMethod === 'telegram') {
+      document.querySelector('#success-screen [data-i18n="success_msg"]').textContent = t('success_msg_tg');
+    }
+  } catch (err) {
+    console.error('Order send error:', err);
     showOrderError(t('order_error'));
     submitBtn.disabled = false;
     submitBtn.textContent = t('place_order');
     return;
-  }
-
-  if (contactMethod === 'telegram') {
-    const contactLabel = 'Telegram';
-    const deliveryLabel = deliveryMethod === 'beijing'
-      ? (lang === 'ru' ? 'Доставка по Пекину' : 'Beijing delivery')
-      : (lang === 'ru' ? 'Доставка по Китаю (СДЭК/почта)' : 'China delivery (SDEK/post)');
-
-    const itemsText = items
-      .map((it) => `• ${it.name} x${it.quantity} — ¥${it.price * it.quantity}`)
-      .join('\n');
-
-    const messageText =
-      `🆕 НОВЫЙ ЗАКАЗ\n\n` +
-      `👤 Имя: ${clientName}\n` +
-      `💬 Связь (${contactLabel}): @${contact.replace('@', '')}\n` +
-      `🚚 Доставка: ${deliveryLabel}\n` +
-      `📍 Адрес: ${address}\n\n` +
-      `🛒 Товары:\n${itemsText}\n\n` +
-      `💰 Итого: ¥${cartTotal()}`;
-
-    try {
-      const resp = await fetch('/.netlify/functions/sendorder', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: messageText,
-          contact_method: 'telegram',
-          telegram_username: contact.replace('@', ''),
-        }),
-      });
-
-      if (!resp.ok) {
-        const errData = await resp.json().catch(() => ({}));
-        console.error('Telegram notify failed:', errData);
-      } else {
-        document.querySelector('#success-screen [data-i18n="success_msg"]').textContent = t('success_msg_tg');
-      }
-    } catch (err) {
-      console.error('Telegram notify error:', err);
-    }
   }
 
   submitBtn.disabled = false;
