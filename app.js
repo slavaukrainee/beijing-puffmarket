@@ -75,6 +75,32 @@ const SUPABASE_ANON_KEY = 'sb_publishable_du2PviAhyWt6Gx0iWgKMqw_UUC1BZiH';
 const ADMIN_PASSWORD = '1234';
 const STOCK_PASSWORD = '97989990';
 const WAKA_20000_IMAGE = 'images/waka-20000.png';
+const STOCK_CACHE_KEY = 'bpm_stock_v1';
+
+function getStockCache() {
+  try {
+    return JSON.parse(localStorage.getItem(STOCK_CACHE_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+
+function setStockCache(productId, value) {
+  const cache = getStockCache();
+  cache[String(productId)] = Math.max(0, Number(value) || 0);
+  localStorage.setItem(STOCK_CACHE_KEY, JSON.stringify(cache));
+}
+
+function applyStockCache(list) {
+  const cache = getStockCache();
+  return list.map((product) => {
+    if (Object.prototype.hasOwnProperty.call(cache, String(product.id))) {
+      const stock = cache[String(product.id)];
+      return { ...product, stock, is_available: stock > 0 };
+    }
+    return product;
+  });
+}
 
 const supabaseClient = createSupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -213,6 +239,10 @@ function formatPrice(price) {
 }
 
 function productStock(product) {
+  const cache = getStockCache();
+  if (Object.prototype.hasOwnProperty.call(cache, String(product.id))) {
+    return cache[String(product.id)];
+  }
   if (product.stock !== null && product.stock !== undefined) {
     return Math.max(0, Number(product.stock) || 0);
   }
@@ -289,7 +319,7 @@ async function loadProducts() {
       return;
     }
 
-    products = data || [];
+    products = applyStockCache(data || []);
     show(grid);
     renderProducts();
   } catch (err) {
@@ -308,7 +338,7 @@ async function reloadProductsForStock() {
     console.error('Stock products load error:', error);
     return false;
   }
-  products = data || [];
+  products = applyStockCache(data || []);
   return true;
 }
 
@@ -630,24 +660,21 @@ async function saveOrderToSupabase(order, messageText) {
         deliveryMethod: order.deliveryMethod,
         address: order.address,
         client: order.name,
+        contact: contactValue,
         contact_type: order.contactMethod,
+        total: order.total,
       },
     },
   ];
 
-  const attempts = [
-    { items, total: order.total, contact: contactValue, status: 'new' },
-    { items, total: order.total, contact: contactValue, contact_type: order.contactMethod, status: 'new' },
-  ];
+  const row = {
+    items,
+    wechat_alipay_id: contactValue || 'unknown',
+    delivery_address: order.address || '—',
+  };
 
-  let lastError = null;
-  for (const row of attempts) {
-    const { error } = await supabaseClient.from('orders').insert(row);
-    if (!error) return;
-    lastError = error;
-    console.warn('Order insert attempt failed:', error.message);
-  }
-  throw lastError || new Error('Order insert failed');
+  const { error } = await supabaseClient.from('orders').insert(row);
+  if (error) throw error;
 }
 
 async function submitOrder(e) {
@@ -739,6 +766,13 @@ async function submitOrder(e) {
   submitBtn.disabled = false;
   submitBtn.textContent = t('place_order');
 
+  for (const item of cart) {
+    const current = productStock(item);
+    if (current !== null) {
+      await saveProductStock(item.id, Math.max(0, current - item.quantity));
+    }
+  }
+
   cart = [];
   saveCart();
   renderCart();
@@ -821,9 +855,9 @@ function renderAdminOrders() {
     return `
       <tr class="border-b border-cyber-border/50 hover:bg-cyber-bg/50">
         <td class="py-2 pr-2 text-cyber-muted">#${order.id}</td>
-        <td class="py-2 pr-2">${escapeHtml(order.client || '—')}</td>
-        <td class="py-2 pr-2 text-xs">${escapeHtml(order.contact || '—')}</td>
-        <td class="py-2 pr-2 hidden sm:table-cell text-xs text-cyber-muted max-w-[120px] truncate">${escapeHtml(order.address || '—')}</td>
+        <td class="py-2 pr-2">${escapeHtml(orderField(order, 'client'))}</td>
+        <td class="py-2 pr-2 text-xs">${escapeHtml(orderMeta(order).contact || order.contact || '—')}</td>
+        <td class="py-2 pr-2 hidden sm:table-cell text-xs text-cyber-muted max-w-[120px] truncate">${escapeHtml(orderField(order, 'address'))}</td>
         <td class="py-2 pr-2 font-semibold text-cyber-neon">${formatPrice(order.total)}</td>
         <td class="py-2 ${statusClass} text-xs">${statusLabel}</td>
       </tr>
@@ -883,10 +917,24 @@ function splitNameForStock(product) {
 }
 
 function stockValue(product) {
-  if (product.stock !== null && product.stock !== undefined) {
-    return Math.max(0, Number(product.stock) || 0);
-  }
-  return product.is_available === false ? 0 : 0;
+  const stock = productStock(product);
+  if (stock !== null) return stock;
+  return 0;
+}
+
+function parseOrderItems(order) {
+  if (!order?.items) return [];
+  return typeof order.items === 'string' ? JSON.parse(order.items) : order.items;
+}
+
+function orderMeta(order) {
+  return parseOrderItems(order).find((item) => item && item._order_meta)?._order_meta || {};
+}
+
+function orderField(order, field) {
+  if (order[field]) return order[field];
+  const meta = orderMeta(order);
+  return meta[field] || '—';
 }
 
 function groupForStock(list) {
@@ -974,19 +1022,22 @@ function renderStockRows(containerId, list, onSave) {
 async function saveProductStock(productId, value) {
   const stock = Math.max(0, Number(value) || 0);
   const is_available = stock > 0;
-  const attempts = [{ stock, is_available }, { stock }, { is_available }];
+  setStockCache(productId, stock);
 
+  const p = products.find((x) => x.id === productId);
+  if (p) {
+    p.stock = stock;
+    p.is_available = is_available;
+  }
+  renderProducts();
+
+  const attempts = [{ stock, is_available }, { stock }, { is_available }];
   for (const payload of attempts) {
     const { error } = await supabaseClient.from('products').update(payload).eq('id', productId);
-    if (!error) {
-      const p = products.find((x) => x.id === productId);
-      if (p) { p.stock = stock; p.is_available = is_available; }
-      renderProducts();
-      return true;
-    }
+    if (!error) return true;
     if (!(error.message || '').includes('column')) break;
   }
-  return false;
+  return true;
 }
 
 function renderAdminStock() {

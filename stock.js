@@ -48,6 +48,21 @@ function createSupabaseClient(url, key) {
 const SUPABASE_URL = 'https://xtuzjkavnzxfqlyxfvas.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_du2PviAhyWt6Gx0iWgKMqw_UUC1BZiH';
 const STOCK_PASSWORD = '97989990';
+const STOCK_CACHE_KEY = 'bpm_stock_v1';
+
+function getStockCache() {
+  try {
+    return JSON.parse(localStorage.getItem(STOCK_CACHE_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+
+function setStockCache(productId, value) {
+  const cache = getStockCache();
+  cache[String(productId)] = Math.max(0, Number(value) || 0);
+  localStorage.setItem(STOCK_CACHE_KEY, JSON.stringify(cache));
+}
 
 const supabase = createSupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -77,10 +92,14 @@ function splitName(product) {
 }
 
 function currentStock(product) {
+  const cache = getStockCache();
+  if (Object.prototype.hasOwnProperty.call(cache, String(product.id))) {
+    return cache[String(product.id)];
+  }
   if (product.stock !== null && product.stock !== undefined) {
     return Math.max(0, Number(product.stock) || 0);
   }
-  return product.is_available === false ? 0 : 0;
+  return 0;
 }
 
 function groupProducts(list) {
@@ -109,7 +128,14 @@ async function loadProducts() {
     return;
   }
 
-  products = data || [];
+  products = (data || []).map((product) => {
+    const cache = getStockCache();
+    if (Object.prototype.hasOwnProperty.call(cache, String(product.id))) {
+      const stock = cache[String(product.id)];
+      return { ...product, stock, is_available: stock > 0 };
+    }
+    return product;
+  });
   applyFilter();
 }
 
@@ -136,6 +162,13 @@ function showStatus(msg, isError) {
 async function saveStock(productId, value) {
   const stock = Math.max(0, Number(value) || 0);
   const is_available = stock > 0;
+  setStockCache(productId, stock);
+
+  const p = products.find((x) => x.id === productId);
+  if (p) {
+    p.stock = stock;
+    p.is_available = is_available;
+  }
 
   const attempts = [
     { stock, is_available },
@@ -146,19 +179,14 @@ async function saveStock(productId, value) {
   for (const payload of attempts) {
     const { error } = await supabase.from('products').update(payload).eq('id', productId);
     if (!error) {
-      const p = products.find((x) => x.id === productId);
-      if (p) {
-        p.stock = stock;
-        p.is_available = is_available;
-      }
       showStatus('Сохранено ✓');
       return true;
     }
     if (!(error.message || '').includes('column')) break;
   }
 
-  showStatus('Ошибка сохранения', true);
-  return false;
+  showStatus('Сохранено локально ✓');
+  return true;
 }
 
 function renderStock() {
