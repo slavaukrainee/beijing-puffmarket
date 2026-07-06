@@ -91,6 +91,34 @@ async function trySaveOrder(order) {
   return false;
 }
 
+async function supabaseGet(path) {
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+  });
+  if (!response.ok) return null;
+  return response.json();
+}
+
+async function decrementStock(items) {
+  if (!Array.isArray(items)) return;
+  for (const item of items) {
+    if (!item.id) continue;
+    const rows = await supabaseGet(`products?id=eq.${item.id}&select=stock&limit=1`);
+    if (!rows || !rows[0] || rows[0].stock == null) continue;
+    const next = Math.max(0, Number(rows[0].stock) - (Number(item.quantity) || 0));
+    const payloads = [
+      { stock: next, is_available: next > 0 },
+      { stock: next },
+      { is_available: next > 0 },
+    ];
+    for (const body of payloads) {
+      if (await supabaseRequest(`products?id=eq.${item.id}`, { method: 'PATCH', body: JSON.stringify(body) })) {
+        break;
+      }
+    }
+  }
+}
+
 exports.handler = async function (event) {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: JSON.stringify({ error: 'Method Not Allowed' }) };
@@ -131,6 +159,7 @@ exports.handler = async function (event) {
     if (order) {
       try {
         savedToDb = await trySaveOrder(order);
+        await decrementStock(order.items);
       } catch (err) {
         console.error('Supabase save skipped:', err.message);
       }

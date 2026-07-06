@@ -100,6 +100,18 @@
     ::-webkit-scrollbar-thumb { background: #00ff88; border-radius: 3px; }
     .lang-btn.active { background: rgba(0, 255, 136, 0.2); border-color: #00ff88; color: #00ff88; }
     .hidden-view { display: none !important; }
+    .product-card.out-of-stock-card {
+      opacity: 0.42;
+      filter: grayscale(0.9);
+      pointer-events: none;
+    }
+    .product-card.out-of-stock-card:hover {
+      transform: none;
+      box-shadow: none;
+    }
+    .product-card.low-stock-card {
+      border-color: rgba(107, 143, 122, 0.5);
+    }
   </style>
 </head>
 <body class="cyber-grid scanline-overlay min-h-screen">

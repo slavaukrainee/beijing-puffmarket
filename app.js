@@ -61,6 +61,8 @@ const i18n = {
     export_error: 'Ошибка экспорта',
     qty: 'шт.',
     remove: 'Удалить',
+    in_stock: 'В наличии',
+    stock_left: 'Осталось',
   },
   en: {
     brand: 'BEIJING PUFF',
@@ -115,6 +117,8 @@ const i18n = {
     export_error: 'Export error',
     qty: 'pcs',
     remove: 'Remove',
+    in_stock: 'In stock',
+    stock_left: 'Left',
   },
 };
 
@@ -135,6 +139,26 @@ function productName(product) {
 
 function formatPrice(price) {
   return `¥${Number(price).toLocaleString(lang === 'ru' ? 'ru-RU' : 'en-US')}`;
+}
+
+function productStock(product) {
+  if (product.stock !== null && product.stock !== undefined) {
+    return Math.max(0, Number(product.stock) || 0);
+  }
+  return null;
+}
+
+function isInStock(product) {
+  if (product.is_available === false) return false;
+  const stock = productStock(product);
+  if (stock === null) return true;
+  return stock > 0;
+}
+
+function maxOrderQty(product) {
+  const stock = productStock(product);
+  if (stock === null) return 99;
+  return stock;
 }
 
 function saveCart() {
@@ -255,17 +279,21 @@ function renderProducts() {
 
     const options = group.variants.map((variant) => {
       const { flavor } = splitProductName(variant);
-      const available = variant.is_available !== false;
-      const suffix = available ? '' : ` (${t('out_of_stock')})`;
+      const stock = productStock(variant);
+      const available = isInStock(variant);
+      const stockHint = stock !== null && available ? ` (${stock} ${t('qty')})` : '';
+      const suffix = available ? stockHint : ` (${t('out_of_stock')})`;
       return `<option value="${variant.id}" ${available ? '' : 'disabled'}>${escapeHtml(flavor)}${suffix}</option>`;
     }).join('');
 
-    const hasAvailable = group.variants.some((v) => v.is_available !== false);
+    const hasAvailable = group.variants.some((v) => isInStock(v));
+    const allOut = !hasAvailable;
 
     return `
-      <article class="product-card bg-cyber-panel border border-cyber-border rounded-lg p-4 neon-border" data-card="${cardId}">
+      <article class="product-card bg-cyber-panel border border-cyber-border rounded-lg p-4 neon-border ${allOut ? 'out-of-stock-card' : ''}" data-card="${cardId}">
         ${imgHtml}
-        <h3 class="font-display font-bold text-cyber-neon text-sm sm:text-base mb-1">${escapeHtml(group.baseName)}</h3>
+        <h3 class="font-display font-bold text-sm sm:text-base mb-1 ${allOut ? 'text-cyber-muted' : 'text-cyber-neon'}">${escapeHtml(group.baseName)}</h3>
+        ${allOut ? `<p class="text-xs text-cyber-muted mb-2">${t('out_of_stock')}</p>` : ''}
         <p class="font-display text-xl font-bold text-white mb-3">${formatPrice(group.price)}</p>
         <label class="block text-xs text-cyber-muted mb-1">${t('choose_flavor')}</label>
         <select id="variant-select-${cardId}" class="w-full bg-cyber-bg border border-cyber-border rounded px-3 py-2 text-sm mb-3">
@@ -296,10 +324,12 @@ function addToCartFromCard(cardId) {
 
 function addToCart(productId) {
   const product = products.find((p) => p.id === productId);
-  if (!product || product.is_available === false) return;
+  if (!product || !isInStock(product)) return;
 
+  const limit = maxOrderQty(product);
   const existing = cart.find((item) => item.id === productId);
   if (existing) {
+    if (existing.quantity >= limit) return;
     existing.quantity += 1;
   } else {
     const { baseName, flavor } = splitProductName(product);
@@ -329,7 +359,11 @@ function updateQuantity(productId, delta) {
   const item = cart.find((i) => i.id === productId);
   if (!item) return;
 
+  const product = products.find((p) => p.id === productId);
+  const limit = product ? maxOrderQty(product) : 99;
+
   item.quantity += delta;
+  if (item.quantity > limit) item.quantity = limit;
   if (item.quantity <= 0) {
     removeFromCart(productId);
   } else {
@@ -455,6 +489,7 @@ async function submitOrder(e) {
   showOrderError('');
 
   const items = cart.map((item) => ({
+    id: item.id,
     name: item.base_name
       ? `${item.base_name}${item.flavor ? ` — ${item.flavor}` : ''}`
       : (lang === 'ru' ? item.name_ru : item.name_en),
@@ -535,6 +570,7 @@ async function submitOrder(e) {
   closeCart();
 
   document.getElementById('order-form').reset();
+  await loadProducts();
   hide(document.getElementById('products-grid'));
   hide(document.getElementById('loading'));
   show(document.getElementById('success-screen'));
