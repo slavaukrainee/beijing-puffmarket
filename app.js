@@ -222,8 +222,9 @@ function productStock(product) {
 function isInStock(product) {
   if (product.is_available === false) return false;
   const stock = productStock(product);
-  if (stock === null) return true;
-  return stock > 0;
+  if (stock !== null) return stock > 0;
+  if (product.is_available === true) return true;
+  return true;
 }
 
 function maxOrderQty(product) {
@@ -623,21 +624,30 @@ async function saveOrderToSupabase(order, messageText) {
 
   const items = [
     ...order.items,
-    { _order_meta: { message_text: messageText, deliveryMethod: order.deliveryMethod } },
+    {
+      _order_meta: {
+        message_text: messageText,
+        deliveryMethod: order.deliveryMethod,
+        address: order.address,
+        client: order.name,
+        contact_type: order.contactMethod,
+      },
+    },
   ];
 
-  const row = {
-    items,
-    total: order.total,
-    contact: contactValue,
-    contact_type: order.contactMethod,
-    client: order.name,
-    address: order.address,
-    status: 'new',
-  };
+  const attempts = [
+    { items, total: order.total, contact: contactValue, status: 'new' },
+    { items, total: order.total, contact: contactValue, contact_type: order.contactMethod, status: 'new' },
+  ];
 
-  const { error } = await supabaseClient.from('orders').insert(row);
-  if (error) throw error;
+  let lastError = null;
+  for (const row of attempts) {
+    const { error } = await supabaseClient.from('orders').insert(row);
+    if (!error) return;
+    lastError = error;
+    console.warn('Order insert attempt failed:', error.message);
+  }
+  throw lastError || new Error('Order insert failed');
 }
 
 async function submitOrder(e) {
@@ -715,6 +725,8 @@ async function submitOrder(e) {
 
     if (contactMethod === 'telegram') {
       document.querySelector('#success-screen [data-i18n="success_msg"]').textContent = t('success_msg_tg');
+    } else {
+      document.querySelector('#success-screen [data-i18n="success_msg"]').textContent = t('success_msg');
     }
   } catch (err) {
     console.error('Order send error:', err);
