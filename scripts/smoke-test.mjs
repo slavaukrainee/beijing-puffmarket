@@ -1,5 +1,6 @@
 const SUPABASE_URL = 'https://xtuzjkavnzxfqlyxfvas.supabase.co';
 const KEY = 'sb_publishable_du2PviAhyWt6Gx0iWgKMqw_UUC1BZiH';
+const SITE = 'https://beijing-puffmarket.pages.dev';
 const SB = `${SUPABASE_URL}/rest/v1`;
 const headers = { apikey: KEY, Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' };
 
@@ -12,68 +13,48 @@ async function sb(path, opts = {}) {
 }
 
 async function main() {
-  console.log('=== Products ===');
-  for (const q of ['products?select=id,stock,is_available&limit=5', 'products?select=id,name_ru&limit=3']) {
-    const r = await sb(q);
-    console.log(q, r.status, r.ok ? JSON.stringify(r.data).slice(0, 200) : r.data);
-  }
-
-  console.log('\n=== Order insert (minimal) ===');
-  for (const row of [
-    {
-      items: [{ name: 'smoke-test', quantity: 1, price: 1, total: 1 }],
-      wechat_alipay_id: 'smoke_test',
-      delivery_address: 'test address',
-    },
-  ]) {
-    const ins = await sb('orders', {
-      method: 'POST',
-      headers: { Prefer: 'return=minimal' },
-      body: JSON.stringify(row),
-    });
-    console.log('insert', ins.status, ins.ok ? 'OK' : JSON.stringify(ins.data));
-  }
-
-  console.log('\n=== Order insert (app payload) ===');
-  const appRow = {
-    items: [
-      { id: 167, name: 'WAKA test', quantity: 1, price: 100 },
-      {
-        _order_meta: {
-          message_text: 'smoke test order',
-          deliveryMethod: 'beijing',
-          address: 'Test addr 123',
-          client: 'Smoke',
-          contact: 'smoke_user',
-          contact_type: 'wechat',
-          total: 100,
-        },
-      },
-    ],
-    wechat_alipay_id: 'smoke_user',
-    delivery_address: 'Test addr 123',
-  };
-  const appIns = await sb('orders', {
-    method: 'POST',
-    headers: { Prefer: 'return=minimal' },
-    body: JSON.stringify(appRow),
-  });
-  console.log('app payload insert', appIns.status, appIns.ok ? 'OK' : JSON.stringify(appIns.data));
-
-  for (const url of ['https://beijing-puffmarket.pages.dev/sendorder', 'https://beijing-puffmarket.pages.dev/.netlify/functions/sendorder']) {
+  console.log('=== Cloudflare site ===');
+  for (const path of ['/', '/app.js', '/sendorder']) {
     try {
-      const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: 'smoke' }) });
-      console.log(url, r.status);
+      const r = await fetch(`${SITE}${path}`, path === '/sendorder' ? { method: 'OPTIONS' } : {});
+      const snippet = path === '/app.js' ? (await r.text()).slice(0, 0) : '';
+      let extra = '';
+      if (path === '/app.js') {
+        const js = await fetch(`${SITE}/app.js`).then((x) => x.text());
+        extra = ` flavor-btn=${js.includes('flavor-btn')} v7=${js.includes('app.js?v=7') || js.includes('STOCK_CACHE')}`;
+      }
+      console.log(path, r.status, extra);
     } catch (e) {
-      console.log(url, 'ERR', e.message);
+      console.log(path, 'ERR', e.message);
     }
   }
 
-  console.log('\n=== Live app.js checks ===');
-  for (const url of ['https://beijing-puffmarket.pages.dev/app.js', 'https://beijing-puffmarket.pages.dev/app.js?v=3']) {
-    const r = await fetch(url);
-    const js = await r.text();
-    console.log(url, r.status, 'flavor-btn:', js.includes('flavor-btn'), 'select:', js.includes('variant-select'));
+  console.log('\n=== Supabase products ===');
+  const products = await sb('products?select=id,name_ru&limit=2');
+  console.log(products.status, products.ok ? 'OK' : products.data);
+
+  console.log('\n=== Order insert ===');
+  const ins = await sb('orders', {
+    method: 'POST',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      items: [{ name: 'cf-smoke', quantity: 1, price: 1 }],
+      wechat_alipay_id: 'cf_test',
+      delivery_address: 'Beijing test',
+    }),
+  });
+  console.log('insert', ins.status, ins.ok ? 'OK' : ins.data);
+
+  console.log('\n=== sendorder POST ===');
+  try {
+    const r = await fetch(`${SITE}/sendorder`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: 'smoke test from script' }),
+    });
+    console.log('sendorder', r.status, await r.text());
+  } catch (e) {
+    console.log('sendorder ERR', e.message);
   }
 }
 

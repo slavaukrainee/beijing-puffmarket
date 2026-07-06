@@ -1,0 +1,4 @@
+.wrangler/
+deploy-tmp/
+node_modules/
+.telegram-offset

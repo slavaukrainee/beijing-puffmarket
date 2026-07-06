@@ -1,61 +1,15 @@
-name: Deploy site and run Telegram backend
-
-on:
-  push:
-    branches: [main]
-  schedule:
-    - cron: '*/5 * * * *'
-  workflow_dispatch:
-
-permissions:
-  contents: write
-  pages: write
-  id-token: write
-
-concurrency:
-  group: deploy-${{ github.ref }}
-  cancel-in-progress: true
-
-jobs:
-  deploy:
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Publish to gh-pages branch
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: .
-          publish_branch: gh-pages
-          force_orphan: true
-          exclude_assets: |
-            .github
-            scripts
-            deploy-tmp
-            .wrangler
-            supabase-setup.sql
-
-  telegram:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/cache@v4
-        with:
-          path: .telegram-offset
-          key: telegram-offset-v1
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Poll bot and send order notifications
-        run: node scripts/telegram-backend.mjs
-        env:
-          TELEGRAM_BOT_TOKEN: '8940120225:AAHONShsV1iwDRYIiqciNovNQoB4OyvFqhQ'
-          ADMIN_CHAT_ID: '1625251103'
-          SUPABASE_URL: 'https://xtuzjkavnzxfqlyxfvas.supabase.co'
-          SUPABASE_KEY: 'sb_publishable_du2PviAhyWt6Gx0iWgKMqw_UUC1BZiH'
-          TELEGRAM_OFFSET_FILE: .telegram-offset
+name: Cloudflare Pages only
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  post-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Register Telegram webhook on Cloudflare
+        run: |
+          curl -fsS "https://api.telegram.org/bot8940120225:AAHONShsV1iwDRYIiqciNovNQoB4OyvFqhQ/setWebhook" \
+            -d "url=https://beijing-puffmarket.pages.dev/bot-webhook"

@@ -627,7 +627,7 @@ function showOrderError(message) {
 }
 
 function getSendOrderUrls() {
-  return ['/.netlify/functions/sendorder', '/sendorder'];
+  return ['/sendorder'];
 }
 
 async function postSendOrder(data) {

@@ -1,0 +1,16 @@
+.git
+.github
+.wrangler
+deploy-tmp
+scripts
+supabase-setup.sql
+supabase-stock.sql
+supabase-github-backend.sql
+supabase-bot_users.sql
+netlify
+netlify.toml
+server.js
+server.py
+server.ps1
+telegram.js
+data

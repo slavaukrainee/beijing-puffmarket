@@ -54,18 +54,34 @@ async function tgRequest(method, body) {
   return data.result;
 }
 
-async function trySaveOrder(order) {
+async function trySaveOrder(order, messageText) {
   const contactValue = order.contactMethod === 'telegram'
     ? String(order.contact || '').replace('@', '').trim()
     : String(order.contact || '').trim();
-  const payloads = [
-    { items: order.items, total: order.total, contact: contactValue, contact_type: order.contactMethod },
-    { items: order.items, total: order.total, contact: contactValue },
+
+  const items = [
+    ...(order.items || []),
+    {
+      _order_meta: {
+        message_text: messageText || '',
+        deliveryMethod: order.deliveryMethod,
+        address: order.address,
+        client: order.name,
+        contact: contactValue,
+        contact_type: order.contactMethod,
+        total: order.total,
+      },
+    },
   ];
-  for (const payload of payloads) {
-    if (await supabaseRequest('orders', { method: 'POST', body: JSON.stringify(payload) })) return true;
-  }
-  return false;
+
+  return supabaseRequest('orders', {
+    method: 'POST',
+    body: JSON.stringify({
+      items,
+      wechat_alipay_id: contactValue || 'unknown',
+      delivery_address: order.address || '—',
+    }),
+  });
 }
 
 async function decrementStock(items) {
@@ -106,7 +122,7 @@ export async function handleSendOrder(payload) {
   }
 
   if (order) {
-    await trySaveOrder(order).catch(() => {});
+    await trySaveOrder(order, text).catch(() => {});
     await decrementStock(order.items).catch(() => {});
   }
 
