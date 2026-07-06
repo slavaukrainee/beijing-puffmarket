@@ -488,6 +488,27 @@ function showOrderError(message) {
   show(el);
 }
 
+function getSendOrderUrls() {
+  return ['/.netlify/functions/sendorder', '/sendorder'];
+}
+
+async function postSendOrder(data) {
+  let lastError = null;
+  for (const url of getSendOrderUrls()) {
+    try {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (resp.status !== 404) return resp;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError || new Error('Order API unavailable');
+}
+
 async function submitOrder(e) {
   e.preventDefault();
 
@@ -535,23 +556,19 @@ async function submitOrder(e) {
   submitBtn.textContent = t('order_sending');
 
   try {
-    const resp = await fetch('/.netlify/functions/sendorder', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        text: messageText,
-        contact_method: contactMethod,
-        telegram_username: contact.replace('@', ''),
-        order: {
-          items,
-          total,
-          contact,
-          contactMethod,
-          name: clientName,
-          address,
-          deliveryMethod,
-        },
-      }),
+    const resp = await postSendOrder({
+      text: messageText,
+      contact_method: contactMethod,
+      telegram_username: contact.replace('@', ''),
+      order: {
+        items,
+        total,
+        contact,
+        contactMethod,
+        name: clientName,
+        address,
+        deliveryMethod,
+      },
     });
 
     const data = await resp.json().catch(() => ({}));
