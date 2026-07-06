@@ -160,6 +160,10 @@ const i18n = {
     remove: 'Удалить',
     in_stock: 'В наличии',
     stock_left: 'Осталось',
+    stock_save: 'Сохранить на склад',
+    stock_saved: 'Склад сохранён',
+    stock_saving: 'Сохранение...',
+    shop_empty: 'Сейчас нет товаров в наличии',
   },
   en: {
     brand: 'BEIJING PUFF',
@@ -216,6 +220,10 @@ const i18n = {
     remove: 'Remove',
     in_stock: 'In stock',
     stock_left: 'Left',
+    stock_save: 'Save to warehouse',
+    stock_saved: 'Warehouse saved',
+    stock_saving: 'Saving...',
+    shop_empty: 'No products in stock right now',
   },
 };
 
@@ -246,21 +254,15 @@ function productStock(product) {
   if (product.stock !== null && product.stock !== undefined) {
     return Math.max(0, Number(product.stock) || 0);
   }
-  return null;
+  return 0;
 }
 
 function isInStock(product) {
-  if (product.is_available === false) return false;
-  const stock = productStock(product);
-  if (stock !== null) return stock > 0;
-  if (product.is_available === true) return true;
-  return true;
+  return productStock(product) > 0;
 }
 
 function maxOrderQty(product) {
-  const stock = productStock(product);
-  if (stock === null) return 99;
-  return stock;
+  return productStock(product);
 }
 
 function saveCart() {
@@ -387,15 +389,12 @@ function firstAvailableVariant(variants) {
 }
 
 function renderFlavorButtons(group, cardId) {
-  const defaultVariant = firstAvailableVariant(group.variants);
-  return group.variants.map((variant) => {
+  const inStockVariants = group.variants.filter((v) => isInStock(v));
+  const defaultVariant = inStockVariants[0] || null;
+  return inStockVariants.map((variant) => {
     const { flavor } = splitProductName(variant);
-    const available = isInStock(variant);
-    const active = available && defaultVariant && variant.id === defaultVariant.id;
-    if (available) {
-      return `<button type="button" class="flavor-btn flavor-btn--in${active ? ' flavor-btn--active' : ''}" data-card="${cardId}" data-variant-id="${variant.id}">${escapeHtml(flavor)}</button>`;
-    }
-    return `<button type="button" class="flavor-btn flavor-btn--out" disabled aria-disabled="true">${escapeHtml(flavor)}</button>`;
+    const active = defaultVariant && variant.id === defaultVariant.id;
+    return `<button type="button" class="flavor-btn flavor-btn--in${active ? ' flavor-btn--active' : ''}" data-card="${cardId}" data-variant-id="${variant.id}">${escapeHtml(flavor)}</button>`;
   }).join('');
 }
 
@@ -413,16 +412,19 @@ function selectFlavor(cardId, variantId) {
 
 function renderProducts() {
   const grid = document.getElementById('products-grid');
-  const groups = groupProducts(products);
+  const groups = groupProducts(products).filter((group) =>
+    group.variants.some((v) => isInStock(v)),
+  );
 
   if (!groups.length) {
-    grid.innerHTML = `<p class="col-span-full text-center text-cyber-muted py-8">${lang === 'ru' ? 'Товары не найдены' : 'No products found'}</p>`;
+    grid.innerHTML = `<p class="col-span-full text-center text-cyber-muted py-8">${t('shop_empty')}</p>`;
     return;
   }
 
   grid.innerHTML = groups.map((group, index) => {
     const cardId = `card-${index}`;
-    const firstVariant = group.variants[0];
+    const inStockVariants = group.variants.filter((v) => isInStock(v));
+    const firstVariant = inStockVariants[0];
     const imageUrl = productImage(firstVariant);
     const imgHtml = imageUrl
       ? `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(group.baseName)}" class="w-full h-40 object-contain rounded mb-3 p-2" loading="lazy">`
@@ -430,30 +432,21 @@ function renderProducts() {
            <span class="text-4xl opacity-30">💨</span>
          </div>`;
 
-    const options = renderFlavorButtons(group, cardId);
-
-    const hasAvailable = group.variants.some((v) => isInStock(v));
-    const allOut = !hasAvailable;
-    const defaultVariant = firstAvailableVariant(group.variants);
+    const options = renderFlavorButtons({ variants: inStockVariants }, cardId);
+    const defaultVariant = firstAvailableVariant(inStockVariants);
 
     return `
-      <article class="product-card bg-cyber-panel border border-cyber-border rounded-lg p-4 neon-border ${allOut ? 'out-of-stock-card' : ''}" data-card="${cardId}" data-selected-variant="${defaultVariant ? defaultVariant.id : ''}">
+      <article class="product-card bg-cyber-panel border border-cyber-border rounded-lg p-4 neon-border" data-card="${cardId}" data-selected-variant="${defaultVariant ? defaultVariant.id : ''}">
         ${imgHtml}
-        <h3 class="font-display font-bold text-sm sm:text-base mb-1 ${allOut ? 'text-cyber-muted' : 'text-cyber-neon'}">${escapeHtml(group.baseName)}</h3>
-        ${allOut ? `<p class="text-xs text-cyber-muted mb-2">${t('out_of_stock')}</p>` : ''}
+        <h3 class="font-display font-bold text-sm sm:text-base mb-1 text-cyber-neon">${escapeHtml(group.baseName)}</h3>
         <p class="font-display text-xl font-bold text-white mb-3">${formatPrice(group.price)}</p>
         <label class="block text-xs text-cyber-muted mb-1">${t('choose_flavor')}</label>
         <div class="flavor-list" id="flavors-${cardId}">
           ${options}
         </div>
-        ${hasAvailable
-          ? `<button class="add-btn w-full py-2.5 border border-cyber-neon text-cyber-neon rounded font-semibold hover:bg-cyber-neon hover:text-cyber-bg transition-colors" data-card="${cardId}">
-               ${t('add_to_cart')}
-             </button>`
-          : `<button disabled class="w-full py-2.5 border border-cyber-muted/30 text-cyber-muted rounded font-semibold cursor-not-allowed opacity-60">
-               ${t('out_of_stock')}
-             </button>`
-        }
+        <button class="add-btn w-full py-2.5 border border-cyber-neon text-cyber-neon rounded font-semibold hover:bg-cyber-neon hover:text-cyber-bg transition-colors" data-card="${cardId}">
+          ${t('add_to_cart')}
+        </button>
       </article>
     `;
   }).join('');
@@ -767,10 +760,7 @@ async function submitOrder(e) {
   submitBtn.textContent = t('place_order');
 
   for (const item of cart) {
-    const current = productStock(item);
-    if (current !== null) {
-      await saveProductStock(item.id, Math.max(0, current - item.quantity));
-    }
+    await saveProductStock(item.id, Math.max(0, productStock(item) - item.quantity));
   }
 
   cart = [];
@@ -917,9 +907,56 @@ function splitNameForStock(product) {
 }
 
 function stockValue(product) {
-  const stock = productStock(product);
-  if (stock !== null) return stock;
-  return 0;
+  return productStock(product);
+}
+
+function showStockSaveStatus(message, isError) {
+  const ids = ['stock-save-status', 'admin-stock-save-status'];
+  ids.forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (!message) {
+      el.textContent = '';
+      hide(el);
+      return;
+    }
+    el.textContent = message;
+    el.className = isError
+      ? 'text-sm text-red-400 mt-2 text-center'
+      : 'text-sm text-cyber-neon mt-2 text-center';
+    show(el);
+  });
+  if (message && !isError) {
+    setTimeout(() => showStockSaveStatus(''), 2500);
+  }
+}
+
+async function saveAllStockFromContainer(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  const inputs = container.querySelectorAll('.stk-input');
+  if (!inputs.length) return;
+
+  const saveBtn = containerId === 'stock-groups'
+    ? document.getElementById('stock-save-btn')
+    : document.getElementById('admin-stock-save-btn');
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = t('stock_saving');
+  }
+
+  for (const input of inputs) {
+    await saveProductStock(Number(input.dataset.id), Number(input.value), { skipRender: true });
+  }
+
+  renderProducts();
+  showStockSaveStatus(t('stock_saved'));
+
+  if (saveBtn) {
+    saveBtn.disabled = false;
+    saveBtn.textContent = t('stock_save');
+  }
 }
 
 function parseOrderItems(order) {
@@ -1007,7 +1044,6 @@ function renderStockRows(containerId, list, onSave) {
     const next = Math.max(0, Number(input.value) + delta);
     input.value = next;
     display.textContent = next;
-    await saveProductStock(Number(productId), next);
     if (onSave) onSave();
   }
 
@@ -1019,7 +1055,7 @@ function renderStockRows(containerId, list, onSave) {
   });
 }
 
-async function saveProductStock(productId, value) {
+async function saveProductStock(productId, value, opts = {}) {
   const stock = Math.max(0, Number(value) || 0);
   const is_available = stock > 0;
   setStockCache(productId, stock);
@@ -1029,7 +1065,7 @@ async function saveProductStock(productId, value) {
     p.stock = stock;
     p.is_available = is_available;
   }
-  renderProducts();
+  if (!opts.skipRender) renderProducts();
 
   const attempts = [{ stock, is_available }, { stock }, { is_available }];
   for (const payload of attempts) {
@@ -1162,6 +1198,8 @@ function initEventListeners() {
     if (e.key === 'Enter') stockLogin();
   });
   document.getElementById('stock-search').addEventListener('input', renderStockPage);
+  document.getElementById('stock-save-btn')?.addEventListener('click', () => saveAllStockFromContainer('stock-groups'));
+  document.getElementById('admin-stock-save-btn')?.addEventListener('click', () => saveAllStockFromContainer('admin-stock-groups'));
 
   if (location.hash === '#stock') openStockPage();
   window.addEventListener('hashchange', () => {

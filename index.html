@@ -323,6 +323,13 @@
         <input type="search" id="stock-search" placeholder="Поиск по названию или вкусу..."
           class="w-full mb-4 bg-cyber-panel border border-cyber-border rounded px-4 py-2.5 text-sm">
         <p id="stock-count" class="text-xs text-cyber-muted mb-3"></p>
+        <div class="sticky top-0 z-10 bg-cyber-bg/95 backdrop-blur py-3 mb-3 border-b border-cyber-border/50">
+          <button id="stock-save-btn" type="button" data-i18n="stock_save"
+            class="w-full py-3 bg-cyber-neon text-cyber-bg font-bold rounded hover:bg-cyber-neonDim transition-colors shadow-neonSm">
+            Сохранить на склад
+          </button>
+          <p id="stock-save-status" class="hidden-view text-sm text-cyber-neon mt-2 text-center"></p>
+        </div>
         <div id="stock-groups" class="space-y-4 pb-8"></div>
       </div>
     </main>
@@ -382,12 +389,17 @@
         </div>
 
         <div id="admin-stock-section" class="hidden-view overflow-auto flex-1 p-4 max-h-[60vh]">
+          <button id="admin-stock-save-btn" type="button" data-i18n="stock_save"
+            class="w-full mb-4 py-3 bg-cyber-neon text-cyber-bg font-bold rounded hover:bg-cyber-neonDim transition-colors">
+            Сохранить на склад
+          </button>
+          <p id="admin-stock-save-status" class="hidden-view text-sm text-cyber-neon mb-3 text-center"></p>
           <div id="admin-stock-groups" class="space-y-4"></div>
         </div>
       </div>
     </div>
   </div>
 
-  <script src="app.js?v=7"></script>
+  <script src="app.js?v=8"></script>
 </body>
 </html>
