@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   cloudflare:
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && secrets.CLOUDFLARE_API_TOKEN != ''
     runs-on: ubuntu-latest
     name: Deploy to Cloudflare Pages
     steps:
@@ -34,15 +34,25 @@ jobs:
   deploy:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Deploy to GitHub Pages (fallback)
-        uses: peaceiris/actions-gh-pages@v4
+      - name: Prepare site files
+        run: |
+          rm -rf .git .github scripts deploy-tmp .wrangler
+          find . -name '.DS_Store' -delete
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: .
-          exclude_assets: '.github,scripts,.git'
+          path: .
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
 
   telegram:
     runs-on: ubuntu-latest
