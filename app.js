@@ -6,7 +6,7 @@ const ADMIN_PASSWORD = '1234';
 const STOCK_PASSWORD = '97989990';
 const WAKA_20000_IMAGE = 'images/waka-20000.png';
 
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabaseClient = window.createSupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const i18n = {
   ru: {
@@ -201,22 +201,31 @@ async function loadProducts() {
   hide(errorMsg);
   hide(grid);
 
-  const { data, error } = await supabaseClient
-    .from('products')
-    .select('*')
-    .order('id');
+  try {
+    const timeout = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('timeout')), 15000);
+    });
+    const { data, error } = await Promise.race([
+      supabaseClient.from('products').select('*').order('id'),
+      timeout,
+    ]);
 
-  hide(loading);
+    hide(loading);
 
-  if (error) {
-    console.error('Products load error:', error);
+    if (error) {
+      console.error('Products load error:', error);
+      show(errorMsg);
+      return;
+    }
+
+    products = data || [];
+    show(grid);
+    renderProducts();
+  } catch (err) {
+    hide(loading);
+    console.error('Products load error:', err);
     show(errorMsg);
-    return;
   }
-
-  products = data || [];
-  show(grid);
-  renderProducts();
 }
 
 async function reloadProductsForStock() {

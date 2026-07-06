@@ -2,7 +2,7 @@ const SUPABASE_URL = 'https://xtuzjkavnzxfqlyxfvas.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_du2PviAhyWt6Gx0iWgKMqw_UUC1BZiH';
 const STOCK_PASSWORD = '97989990';
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabase = window.createSupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let products = [];
 let filtered = [];
