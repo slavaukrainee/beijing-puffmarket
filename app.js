@@ -509,6 +509,30 @@ async function postSendOrder(data) {
   throw lastError || new Error('Order API unavailable');
 }
 
+async function saveOrderToSupabase(order, messageText) {
+  const contactValue = order.contactMethod === 'telegram'
+    ? String(order.contact || '').replace('@', '').trim()
+    : String(order.contact || '').trim();
+
+  const items = [
+    ...order.items,
+    { _order_meta: { message_text: messageText, deliveryMethod: order.deliveryMethod } },
+  ];
+
+  const row = {
+    items,
+    total: order.total,
+    contact: contactValue,
+    contact_type: order.contactMethod,
+    client: order.name,
+    address: order.address,
+    status: 'new',
+  };
+
+  const { error } = await supabaseClient.from('orders').insert(row);
+  if (error) throw error;
+}
+
 async function submitOrder(e) {
   e.preventDefault();
 
@@ -555,30 +579,31 @@ async function submitOrder(e) {
   submitBtn.disabled = true;
   submitBtn.textContent = t('order_sending');
 
+  const orderPayload = {
+    items,
+    total,
+    contact,
+    contactMethod,
+    name: clientName,
+    address,
+    deliveryMethod,
+  };
+
   try {
-    const resp = await postSendOrder({
-      text: messageText,
-      contact_method: contactMethod,
-      telegram_username: contact.replace('@', ''),
-      order: {
-        items,
-        total,
-        contact,
-        contactMethod,
-        name: clientName,
-        address,
-        deliveryMethod,
-      },
-    });
+    let sent = false;
 
-    const data = await resp.json().catch(() => ({}));
+    try {
+      const resp = await postSendOrder({
+        text: messageText,
+        contact_method: contactMethod,
+        telegram_username: contact.replace('@', ''),
+        order: orderPayload,
+      });
+      if (resp.ok) sent = true;
+    } catch (_) {}
 
-    if (!resp.ok) {
-      console.error('Order send failed:', data);
-      showOrderError(t('order_error'));
-      submitBtn.disabled = false;
-      submitBtn.textContent = t('place_order');
-      return;
+    if (!sent) {
+      await saveOrderToSupabase(orderPayload, messageText);
     }
 
     if (contactMethod === 'telegram') {
