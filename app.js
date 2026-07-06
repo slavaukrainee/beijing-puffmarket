@@ -351,6 +351,35 @@ function groupProducts(list) {
   return Array.from(groups.values());
 }
 
+function firstAvailableVariant(variants) {
+  return variants.find((v) => isInStock(v)) || null;
+}
+
+function renderFlavorButtons(group, cardId) {
+  const defaultVariant = firstAvailableVariant(group.variants);
+  return group.variants.map((variant) => {
+    const { flavor } = splitProductName(variant);
+    const available = isInStock(variant);
+    const active = available && defaultVariant && variant.id === defaultVariant.id;
+    if (available) {
+      return `<button type="button" class="flavor-btn flavor-btn--in${active ? ' flavor-btn--active' : ''}" data-card="${cardId}" data-variant-id="${variant.id}">${escapeHtml(flavor)}</button>`;
+    }
+    return `<button type="button" class="flavor-btn flavor-btn--out" disabled aria-disabled="true">${escapeHtml(flavor)}</button>`;
+  }).join('');
+}
+
+function selectFlavor(cardId, variantId) {
+  const card = document.querySelector(`[data-card="${cardId}"]`);
+  if (!card) return;
+  const product = products.find((p) => p.id === variantId);
+  if (!product || !isInStock(product)) return;
+
+  card.dataset.selectedVariant = String(variantId);
+  card.querySelectorAll('.flavor-btn--in').forEach((btn) => {
+    btn.classList.toggle('flavor-btn--active', Number(btn.dataset.variantId) === variantId);
+  });
+}
+
 function renderProducts() {
   const grid = document.getElementById('products-grid');
   const groups = groupProducts(products);
@@ -370,28 +399,22 @@ function renderProducts() {
            <span class="text-4xl opacity-30">💨</span>
          </div>`;
 
-    const options = group.variants.map((variant) => {
-      const { flavor } = splitProductName(variant);
-      const stock = productStock(variant);
-      const available = isInStock(variant);
-      const stockHint = stock !== null && available ? ` (${stock} ${t('qty')})` : '';
-      const suffix = available ? stockHint : ` (${t('out_of_stock')})`;
-      return `<option value="${variant.id}" ${available ? '' : 'disabled'}>${escapeHtml(flavor)}${suffix}</option>`;
-    }).join('');
+    const options = renderFlavorButtons(group, cardId);
 
     const hasAvailable = group.variants.some((v) => isInStock(v));
     const allOut = !hasAvailable;
+    const defaultVariant = firstAvailableVariant(group.variants);
 
     return `
-      <article class="product-card bg-cyber-panel border border-cyber-border rounded-lg p-4 neon-border ${allOut ? 'out-of-stock-card' : ''}" data-card="${cardId}">
+      <article class="product-card bg-cyber-panel border border-cyber-border rounded-lg p-4 neon-border ${allOut ? 'out-of-stock-card' : ''}" data-card="${cardId}" data-selected-variant="${defaultVariant ? defaultVariant.id : ''}">
         ${imgHtml}
         <h3 class="font-display font-bold text-sm sm:text-base mb-1 ${allOut ? 'text-cyber-muted' : 'text-cyber-neon'}">${escapeHtml(group.baseName)}</h3>
         ${allOut ? `<p class="text-xs text-cyber-muted mb-2">${t('out_of_stock')}</p>` : ''}
         <p class="font-display text-xl font-bold text-white mb-3">${formatPrice(group.price)}</p>
         <label class="block text-xs text-cyber-muted mb-1">${t('choose_flavor')}</label>
-        <select id="variant-select-${cardId}" class="w-full bg-cyber-bg border border-cyber-border rounded px-3 py-2 text-sm mb-3">
+        <div class="flavor-list" id="flavors-${cardId}">
           ${options}
-        </select>
+        </div>
         ${hasAvailable
           ? `<button class="add-btn w-full py-2.5 border border-cyber-neon text-cyber-neon rounded font-semibold hover:bg-cyber-neon hover:text-cyber-bg transition-colors" data-card="${cardId}">
                ${t('add_to_cart')}
@@ -404,15 +427,20 @@ function renderProducts() {
     `;
   }).join('');
 
+  grid.querySelectorAll('.flavor-btn--in').forEach((btn) => {
+    btn.addEventListener('click', () => selectFlavor(btn.dataset.card, Number(btn.dataset.variantId)));
+  });
+
   grid.querySelectorAll('.add-btn').forEach((btn) => {
     btn.addEventListener('click', () => addToCartFromCard(btn.dataset.card));
   });
 }
 
 function addToCartFromCard(cardId) {
-  const select = document.getElementById(`variant-select-${cardId}`);
-  if (!select) return;
-  addToCart(Number(select.value));
+  const card = document.querySelector(`[data-card="${cardId}"]`);
+  const variantId = card ? Number(card.dataset.selectedVariant) : 0;
+  if (!variantId) return;
+  addToCart(variantId);
 }
 
 function addToCart(productId) {
