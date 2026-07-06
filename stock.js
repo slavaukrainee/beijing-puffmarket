@@ -1,6 +1,6 @@
 const SUPABASE_URL = 'https://xtuzjkavnzxfqlyxfvas.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_du2PviAhyWt6Gx0iWgKMqw_UUC1BZiH';
-const ADMIN_PASSWORD = '1234';
+const STOCK_PASSWORD = '97989990';
 
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -202,7 +202,7 @@ function renderStock() {
 
 function login() {
   const password = document.getElementById('login-password').value;
-  if (password !== ADMIN_PASSWORD) {
+  if (password !== STOCK_PASSWORD) {
     show(document.getElementById('login-error'));
     return;
   }

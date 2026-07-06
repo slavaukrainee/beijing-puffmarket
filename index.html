@@ -286,8 +286,10 @@
         </div>
       </div>
       <div id="stock-app" class="hidden-view">
-        <input type="search" id="stock-search" placeholder="Поиск..."
+        <p id="stock-loading" class="hidden-view text-center text-cyber-muted py-8">Загрузка товаров...</p>
+        <input type="search" id="stock-search" placeholder="Поиск по названию или вкусу..."
           class="w-full mb-4 bg-cyber-panel border border-cyber-border rounded px-4 py-2.5 text-sm">
+        <p id="stock-count" class="text-xs text-cyber-muted mb-3"></p>
         <div id="stock-groups" class="space-y-4 pb-8"></div>
       </div>
     </main>

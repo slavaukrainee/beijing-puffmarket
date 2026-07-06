@@ -3,6 +3,7 @@
 const SUPABASE_URL = 'https://xtuzjkavnzxfqlyxfvas.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_du2PviAhyWt6Gx0iWgKMqw_UUC1BZiH';
 const ADMIN_PASSWORD = '1234';
+const STOCK_PASSWORD = '97989990';
 const WAKA_20000_IMAGE = 'images/waka-20000.png';
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -216,6 +217,19 @@ async function loadProducts() {
   products = data || [];
   show(grid);
   renderProducts();
+}
+
+async function reloadProductsForStock() {
+  const { data, error } = await supabaseClient
+    .from('products')
+    .select('*')
+    .order('id');
+  if (error) {
+    console.error('Stock products load error:', error);
+    return false;
+  }
+  products = data || [];
+  return true;
 }
 
 function productImage(product) {
@@ -731,8 +745,13 @@ function renderStockRows(containerId, list, onSave) {
 
   const groups = groupForStock(list);
   if (!groups.length) {
-    container.innerHTML = '<p class="text-center text-cyber-muted py-6">Товары не найдены</p>';
+    container.innerHTML = '<p class="text-center text-cyber-muted py-6">Товары не найдены. Обновите страницу.</p>';
     return;
+  }
+
+  const countEl = document.getElementById('stock-count');
+  if (countEl && containerId === 'stock-groups') {
+    countEl.textContent = `Всего позиций: ${list.length}`;
   }
 
   container.innerHTML = groups.map((group) => {
@@ -741,54 +760,53 @@ function renderStockRows(containerId, list, onSave) {
       const stock = stockValue(product);
       const dim = stock <= 0 ? 'opacity-50' : '';
       return `
-        <tr class="border-b border-cyber-border/40 ${dim}">
-          <td class="py-2 pr-2 text-sm pl-2">${escapeHtml(flavor)}</td>
-          <td class="py-2 pr-2">
-            <div class="flex items-center gap-1">
-              <button type="button" class="stk-minus w-7 h-7 border border-cyber-border rounded text-xs" data-id="${product.id}">−</button>
-              <input type="number" min="0" value="${stock}" class="stk-input w-14 text-center bg-cyber-bg border border-cyber-border rounded py-1 text-sm" data-id="${product.id}">
-              <button type="button" class="stk-plus w-7 h-7 border border-cyber-border rounded text-xs" data-id="${product.id}">+</button>
+        <tr class="border-b border-cyber-border/40 ${dim}" data-product-id="${product.id}">
+          <td class="py-3 pr-2 text-sm pl-3">${escapeHtml(flavor)}</td>
+          <td class="py-3 pr-2">
+            <div class="flex items-center justify-center gap-2">
+              <button type="button" class="stk-minus w-10 h-10 text-lg font-bold border-2 border-cyber-border rounded-lg hover:border-cyber-neon hover:bg-cyber-neon/10 transition-colors" data-id="${product.id}" title="Убрать 1">−</button>
+              <span class="stk-display w-12 text-center text-lg font-bold text-cyber-neon" data-id="${product.id}">${stock}</span>
+              <input type="hidden" class="stk-input" data-id="${product.id}" value="${stock}">
+              <button type="button" class="stk-plus w-10 h-10 text-lg font-bold border-2 border-cyber-border rounded-lg hover:border-cyber-neon hover:bg-cyber-neon/10 transition-colors" data-id="${product.id}" title="Добавить 1">+</button>
             </div>
-          </td>
-          <td class="py-2 pr-2 text-right">
-            <button type="button" class="stk-save text-xs px-2 py-1 border border-cyber-neon text-cyber-neon rounded" data-id="${product.id}">OK</button>
           </td>
         </tr>`;
     }).join('');
 
     return `
-      <section class="bg-cyber-bg/50 border border-cyber-border rounded-lg overflow-hidden">
-        <div class="px-3 py-2 border-b border-cyber-border flex justify-between">
-          <span class="text-cyber-neon text-sm font-semibold">${escapeHtml(group.model)}</span>
-          <span class="text-cyber-muted text-xs">¥${group.price}</span>
+      <section class="bg-cyber-panel border border-cyber-border rounded-lg overflow-hidden">
+        <div class="px-4 py-3 border-b border-cyber-border flex justify-between items-center">
+          <span class="text-cyber-neon font-display font-semibold">${escapeHtml(group.model)}</span>
+          <span class="text-cyber-muted text-sm">¥${group.price}</span>
         </div>
-        <table class="w-full text-left text-sm">
-          <thead><tr class="text-xs text-cyber-muted"><th class="py-1 pl-2">Вкус</th><th>Остаток</th><th></th></tr></thead>
+        <table class="w-full text-left">
+          <thead>
+            <tr class="text-xs text-cyber-muted border-b border-cyber-border/60">
+              <th class="py-2 pl-3">Вкус</th>
+              <th class="py-2 text-center">Остаток (− / +)</th>
+            </tr>
+          </thead>
           <tbody>${rows}</tbody>
         </table>
       </section>`;
   }).join('');
 
+  async function adjustStock(productId, delta) {
+    const input = container.querySelector(`.stk-input[data-id="${productId}"]`);
+    const display = container.querySelector(`.stk-display[data-id="${productId}"]`);
+    if (!input || !display) return;
+    const next = Math.max(0, Number(input.value) + delta);
+    input.value = next;
+    display.textContent = next;
+    await saveProductStock(Number(productId), next);
+    if (onSave) onSave();
+  }
+
   container.querySelectorAll('.stk-minus').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const input = container.querySelector(`.stk-input[data-id="${btn.dataset.id}"]`);
-      input.value = Math.max(0, Number(input.value) - 1);
-    });
+    btn.addEventListener('click', () => adjustStock(btn.dataset.id, -1));
   });
   container.querySelectorAll('.stk-plus').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const input = container.querySelector(`.stk-input[data-id="${btn.dataset.id}"]`);
-      input.value = Number(input.value) + 1;
-    });
-  });
-  container.querySelectorAll('.stk-save').forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      const input = container.querySelector(`.stk-input[data-id="${btn.dataset.id}"]`);
-      btn.disabled = true;
-      await saveProductStock(Number(btn.dataset.id), input.value);
-      btn.disabled = false;
-      if (onSave) onSave();
-    });
+    btn.addEventListener('click', () => adjustStock(btn.dataset.id, 1));
   });
 }
 
@@ -828,7 +846,8 @@ function showAdminTab(tab) {
     stockBtn.className = 'admin-tab px-3 py-1.5 text-sm rounded border border-cyber-neon text-cyber-neon';
     hide(ordersSec);
     show(stockSec);
-    renderAdminStock();
+    if (!products.length) loadProducts().then(renderAdminStock);
+    else renderAdminStock();
   } else {
     stockBtn.className = 'admin-tab px-3 py-1.5 text-sm rounded border border-cyber-border text-cyber-muted';
     ordersBtn.className = 'admin-tab px-3 py-1.5 text-sm rounded border border-cyber-neon text-cyber-neon';
@@ -837,14 +856,25 @@ function showAdminTab(tab) {
   }
 }
 
-function openStockPage() {
+async function openStockPage() {
   show(document.getElementById('stock-page'));
   document.body.style.overflow = 'hidden';
+
   if (sessionStorage.getItem('stock_auth') === '1') {
     hide(document.getElementById('stock-login'));
     show(document.getElementById('stock-app'));
-    renderStockPage();
+    await refreshStockList();
   }
+}
+
+async function refreshStockList() {
+  const loading = document.getElementById('stock-loading');
+  const groups = document.getElementById('stock-groups');
+  show(loading);
+  groups.innerHTML = '';
+  await reloadProductsForStock();
+  hide(loading);
+  renderStockPage();
 }
 
 function closeStockPage() {
@@ -863,9 +893,9 @@ function renderStockPage() {
   renderStockRows('stock-groups', list, () => renderStockPage());
 }
 
-function stockLogin() {
+async function stockLogin() {
   const password = document.getElementById('stock-password').value;
-  if (password !== ADMIN_PASSWORD) {
+  if (password !== STOCK_PASSWORD) {
     show(document.getElementById('stock-login-error'));
     return;
   }
@@ -873,7 +903,7 @@ function stockLogin() {
   hide(document.getElementById('stock-login-error'));
   hide(document.getElementById('stock-login'));
   show(document.getElementById('stock-app'));
-  renderStockPage();
+  await refreshStockList();
 }
 
 function escapeHtml(str) {
