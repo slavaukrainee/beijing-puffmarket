@@ -28,9 +28,8 @@ jobs:
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          accountId: 79cb8f37c6179789e22719a50a3d8a91
           command: pages deploy . --project-name=beijing-puffmarket --commit-dirty=true
-        continue-on-error: true
 
   deploy:
     if: github.event_name == 'push'
