@@ -1,4 +1,4 @@
-import { handleSendOrder } from '../_shared/handlers.js';
+import { handleSendOrder } from './_shared/handlers.js';
 
 export async function onRequestPost(context) {
   try {
