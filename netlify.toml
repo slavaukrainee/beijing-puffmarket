@@ -4,3 +4,13 @@
 
 [dev]
   publish = "."
+
+[[redirects]]
+  from = "/stock"
+  to = "/index.html#stock"
+  status = 200
+
+[[redirects]]
+  from = "/stock.html"
+  to = "/index.html#stock"
+  status = 200

@@ -259,9 +259,39 @@
     </div>
   </aside>
 
-  <footer class="max-w-6xl mx-auto px-4 py-8 text-center">
+  <footer class="max-w-6xl mx-auto px-4 py-8 text-center space-y-2">
+    <button id="stock-link" class="text-cyber-neon/70 hover:text-cyber-neon text-sm transition-colors">📦 Склад / Stock</button>
+    <br>
     <button id="admin-link" class="text-cyber-muted/40 hover:text-cyber-muted text-xs transition-colors" data-i18n="admin_link">·</button>
   </footer>
+
+  <!-- Страница склада (встроена, без отдельного файла) -->
+  <div id="stock-page" class="hidden-view fixed inset-0 z-[90] bg-cyber-bg overflow-y-auto">
+    <header class="sticky top-0 z-10 bg-cyber-panel/95 border-b border-cyber-border backdrop-blur">
+      <div class="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
+        <div>
+          <h2 class="font-display text-cyber-neon text-lg">📦 СКЛАД</h2>
+          <p class="text-xs text-cyber-muted">Учёт остатков</p>
+        </div>
+        <button id="stock-back" class="text-sm text-cyber-muted hover:text-cyber-neon">← На сайт</button>
+      </div>
+    </header>
+    <main class="max-w-5xl mx-auto px-4 py-6">
+      <div id="stock-login" class="max-w-sm mx-auto mt-12">
+        <div class="bg-cyber-panel border border-cyber-border rounded-lg p-6">
+          <h3 class="font-display text-cyber-neon mb-4">Вход на склад</h3>
+          <input type="password" id="stock-password" class="w-full bg-cyber-bg border border-cyber-border rounded px-4 py-3 mb-4" placeholder="Пароль">
+          <button id="stock-login-btn" class="w-full py-3 bg-cyber-neon text-cyber-bg font-bold rounded">Войти</button>
+          <p id="stock-login-error" class="hidden-view text-red-400 text-sm mt-3">Неверный пароль</p>
+        </div>
+      </div>
+      <div id="stock-app" class="hidden-view">
+        <input type="search" id="stock-search" placeholder="Поиск..."
+          class="w-full mb-4 bg-cyber-panel border border-cyber-border rounded px-4 py-2.5 text-sm">
+        <div id="stock-groups" class="space-y-4 pb-8"></div>
+      </div>
+    </main>
+  </div>
 
   <div id="admin-modal" class="fixed inset-0 z-[100] hidden-view flex items-center justify-center p-4">
     <div class="absolute inset-0 bg-black/80 modal-backdrop" id="admin-backdrop"></div>
@@ -278,7 +308,10 @@
 
       <div id="admin-panel" class="hidden-view flex flex-col max-h-[90vh]">
         <div class="flex items-center justify-between p-4 border-b border-cyber-border">
-          <h3 class="font-display text-lg text-cyber-neon" data-i18n="admin_orders">Заказы</h3>
+          <div class="flex gap-2">
+            <button id="admin-tab-orders" class="admin-tab px-3 py-1.5 text-sm rounded border border-cyber-neon text-cyber-neon">Заказы</button>
+            <button id="admin-tab-stock" class="admin-tab px-3 py-1.5 text-sm rounded border border-cyber-border text-cyber-muted">Склад</button>
+          </div>
           <button id="admin-close" class="text-cyber-muted hover:text-cyber-neon">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
@@ -286,6 +319,7 @@
           </button>
         </div>
 
+        <div id="admin-orders-section">
         <div class="p-4 border-b border-cyber-border">
           <button id="export-1c" class="w-full sm:w-auto px-6 py-3 bg-cyber-neon text-cyber-bg font-bold rounded hover:bg-cyber-neonDim transition-colors shadow-neonSm" data-i18n="export_1c">
             Экспорт в 1С
@@ -294,7 +328,7 @@
 
         <div id="admin-loading" class="p-8 text-center text-cyber-muted hidden-view" data-i18n="loading">Загрузка...</div>
 
-        <div class="overflow-auto flex-1 p-4">
+        <div class="overflow-auto flex-1 p-4 max-h-[50vh]">
           <table class="w-full text-sm">
             <thead>
               <tr class="text-cyber-muted border-b border-cyber-border text-left">
@@ -309,6 +343,11 @@
             <tbody id="admin-orders-body"></tbody>
           </table>
           <p id="admin-no-orders" class="hidden-view text-center text-cyber-muted py-8" data-i18n="no_orders">Нет заказов</p>
+        </div>
+        </div>
+
+        <div id="admin-stock-section" class="hidden-view overflow-auto flex-1 p-4 max-h-[60vh]">
+          <div id="admin-stock-groups" class="space-y-4"></div>
         </div>
       </div>
     </div>

@@ -602,6 +602,7 @@ async function adminLogin() {
 
   hide(document.getElementById('admin-login'));
   show(document.getElementById('admin-panel'));
+  showAdminTab('orders');
   await loadAdminOrders();
 }
 
@@ -696,6 +697,185 @@ async function exportTo1C() {
   await loadAdminOrders();
 }
 
+function splitNameForStock(product) {
+  const ru = product.name_ru || product.name || product.name_en || '';
+  const parts = String(ru).split(/\s[-–—]\s/);
+  if (parts.length > 1) {
+    return { model: parts[0].trim(), flavor: parts.slice(1).join(' - ').trim() };
+  }
+  if (product.flavor) return { model: String(ru).trim(), flavor: product.flavor };
+  return { model: String(ru).trim(), flavor: '—' };
+}
+
+function stockValue(product) {
+  if (product.stock !== null && product.stock !== undefined) {
+    return Math.max(0, Number(product.stock) || 0);
+  }
+  return product.is_available === false ? 0 : 0;
+}
+
+function groupForStock(list) {
+  const groups = new Map();
+  list.forEach((product) => {
+    const { model } = splitNameForStock(product);
+    const key = `${model}|${product.price}`;
+    if (!groups.has(key)) groups.set(key, { model, price: product.price, items: [] });
+    groups.get(key).items.push(product);
+  });
+  return Array.from(groups.values()).sort((a, b) => a.model.localeCompare(b.model, 'ru'));
+}
+
+function renderStockRows(containerId, list, onSave) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  const groups = groupForStock(list);
+  if (!groups.length) {
+    container.innerHTML = '<p class="text-center text-cyber-muted py-6">Товары не найдены</p>';
+    return;
+  }
+
+  container.innerHTML = groups.map((group) => {
+    const rows = group.items.map((product) => {
+      const { flavor } = splitNameForStock(product);
+      const stock = stockValue(product);
+      const dim = stock <= 0 ? 'opacity-50' : '';
+      return `
+        <tr class="border-b border-cyber-border/40 ${dim}">
+          <td class="py-2 pr-2 text-sm pl-2">${escapeHtml(flavor)}</td>
+          <td class="py-2 pr-2">
+            <div class="flex items-center gap-1">
+              <button type="button" class="stk-minus w-7 h-7 border border-cyber-border rounded text-xs" data-id="${product.id}">−</button>
+              <input type="number" min="0" value="${stock}" class="stk-input w-14 text-center bg-cyber-bg border border-cyber-border rounded py-1 text-sm" data-id="${product.id}">
+              <button type="button" class="stk-plus w-7 h-7 border border-cyber-border rounded text-xs" data-id="${product.id}">+</button>
+            </div>
+          </td>
+          <td class="py-2 pr-2 text-right">
+            <button type="button" class="stk-save text-xs px-2 py-1 border border-cyber-neon text-cyber-neon rounded" data-id="${product.id}">OK</button>
+          </td>
+        </tr>`;
+    }).join('');
+
+    return `
+      <section class="bg-cyber-bg/50 border border-cyber-border rounded-lg overflow-hidden">
+        <div class="px-3 py-2 border-b border-cyber-border flex justify-between">
+          <span class="text-cyber-neon text-sm font-semibold">${escapeHtml(group.model)}</span>
+          <span class="text-cyber-muted text-xs">¥${group.price}</span>
+        </div>
+        <table class="w-full text-left text-sm">
+          <thead><tr class="text-xs text-cyber-muted"><th class="py-1 pl-2">Вкус</th><th>Остаток</th><th></th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </section>`;
+  }).join('');
+
+  container.querySelectorAll('.stk-minus').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const input = container.querySelector(`.stk-input[data-id="${btn.dataset.id}"]`);
+      input.value = Math.max(0, Number(input.value) - 1);
+    });
+  });
+  container.querySelectorAll('.stk-plus').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const input = container.querySelector(`.stk-input[data-id="${btn.dataset.id}"]`);
+      input.value = Number(input.value) + 1;
+    });
+  });
+  container.querySelectorAll('.stk-save').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const input = container.querySelector(`.stk-input[data-id="${btn.dataset.id}"]`);
+      btn.disabled = true;
+      await saveProductStock(Number(btn.dataset.id), input.value);
+      btn.disabled = false;
+      if (onSave) onSave();
+    });
+  });
+}
+
+async function saveProductStock(productId, value) {
+  const stock = Math.max(0, Number(value) || 0);
+  const is_available = stock > 0;
+  const attempts = [{ stock, is_available }, { stock }, { is_available }];
+
+  for (const payload of attempts) {
+    const { error } = await supabaseClient.from('products').update(payload).eq('id', productId);
+    if (!error) {
+      const p = products.find((x) => x.id === productId);
+      if (p) { p.stock = stock; p.is_available = is_available; }
+      renderProducts();
+      return true;
+    }
+    if (!(error.message || '').includes('column')) break;
+  }
+  return false;
+}
+
+function renderAdminStock() {
+  renderStockRows('admin-stock-groups', products, () => {
+    renderAdminStock();
+    renderProducts();
+  });
+}
+
+function showAdminTab(tab) {
+  const ordersBtn = document.getElementById('admin-tab-orders');
+  const stockBtn = document.getElementById('admin-tab-stock');
+  const ordersSec = document.getElementById('admin-orders-section');
+  const stockSec = document.getElementById('admin-stock-section');
+
+  if (tab === 'stock') {
+    ordersBtn.className = 'admin-tab px-3 py-1.5 text-sm rounded border border-cyber-border text-cyber-muted';
+    stockBtn.className = 'admin-tab px-3 py-1.5 text-sm rounded border border-cyber-neon text-cyber-neon';
+    hide(ordersSec);
+    show(stockSec);
+    renderAdminStock();
+  } else {
+    stockBtn.className = 'admin-tab px-3 py-1.5 text-sm rounded border border-cyber-border text-cyber-muted';
+    ordersBtn.className = 'admin-tab px-3 py-1.5 text-sm rounded border border-cyber-neon text-cyber-neon';
+    hide(stockSec);
+    show(ordersSec);
+  }
+}
+
+function openStockPage() {
+  show(document.getElementById('stock-page'));
+  document.body.style.overflow = 'hidden';
+  if (sessionStorage.getItem('stock_auth') === '1') {
+    hide(document.getElementById('stock-login'));
+    show(document.getElementById('stock-app'));
+    renderStockPage();
+  }
+}
+
+function closeStockPage() {
+  hide(document.getElementById('stock-page'));
+  document.body.style.overflow = '';
+  location.hash = '';
+}
+
+function renderStockPage() {
+  const q = (document.getElementById('stock-search')?.value || '').trim().toLowerCase();
+  const list = products.filter((p) => {
+    if (!q) return true;
+    const { model, flavor } = splitNameForStock(p);
+    return model.toLowerCase().includes(q) || flavor.toLowerCase().includes(q);
+  });
+  renderStockRows('stock-groups', list, () => renderStockPage());
+}
+
+function stockLogin() {
+  const password = document.getElementById('stock-password').value;
+  if (password !== ADMIN_PASSWORD) {
+    show(document.getElementById('stock-login-error'));
+    return;
+  }
+  sessionStorage.setItem('stock_auth', '1');
+  hide(document.getElementById('stock-login-error'));
+  hide(document.getElementById('stock-login'));
+  show(document.getElementById('stock-app'));
+  renderStockPage();
+}
+
 function escapeHtml(str) {
   if (str == null) return '';
   return String(str)
@@ -730,6 +910,22 @@ function initEventListeners() {
     if (e.key === 'Enter') adminLogin();
   });
   document.getElementById('export-1c').addEventListener('click', exportTo1C);
+  document.getElementById('admin-tab-orders').addEventListener('click', () => showAdminTab('orders'));
+  document.getElementById('admin-tab-stock').addEventListener('click', () => showAdminTab('stock'));
+
+  document.getElementById('stock-link').addEventListener('click', openStockPage);
+  document.getElementById('stock-back').addEventListener('click', closeStockPage);
+  document.getElementById('stock-login-btn').addEventListener('click', stockLogin);
+  document.getElementById('stock-password').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') stockLogin();
+  });
+  document.getElementById('stock-search').addEventListener('input', renderStockPage);
+
+  if (location.hash === '#stock') openStockPage();
+  window.addEventListener('hashchange', () => {
+    if (location.hash === '#stock') openStockPage();
+    else closeStockPage();
+  });
 }
 
 async function init() {
