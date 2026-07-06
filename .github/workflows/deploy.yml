@@ -1,78 +1,61 @@
-name: Deploy site and run Telegram backend
-
-on:
-  push:
-    branches: [main]
-  schedule:
-    - cron: '*/5 * * * *'
-  workflow_dispatch:
-
-permissions:
-  contents: write
-  pages: write
-  id-token: write
-
-concurrency:
-  group: deploy-${{ github.ref }}
-  cancel-in-progress: true
-
-jobs:
-  cloudflare:
-    if: github.event_name == 'push' && secrets.CLOUDFLARE_API_TOKEN != ''
-    runs-on: ubuntu-latest
-    name: Deploy to Cloudflare Pages
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Deploy to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: 79cb8f37c6179789e22719a50a3d8a91
-          command: pages deploy . --project-name=beijing-puffmarket --commit-dirty=true
-
-  deploy:
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Prepare site files
-        run: |
-          rm -rf .git .github scripts deploy-tmp .wrangler
-          find . -name '.DS_Store' -delete
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: .
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
-
-  telegram:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/cache@v4
-        with:
-          path: .telegram-offset
-          key: telegram-offset-v1
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Poll bot and send order notifications
-        run: node scripts/telegram-backend.mjs
-        env:
-          TELEGRAM_BOT_TOKEN: '8940120225:AAHONShsV1iwDRYIiqciNovNQoB4OyvFqhQ'
-          ADMIN_CHAT_ID: '1625251103'
-          SUPABASE_URL: 'https://xtuzjkavnzxfqlyxfvas.supabase.co'
-          SUPABASE_KEY: 'sb_publishable_du2PviAhyWt6Gx0iWgKMqw_UUC1BZiH'
-          TELEGRAM_OFFSET_FILE: .telegram-offset
+name: Deploy site and run Telegram backend
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Publish to gh-pages branch
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: .
+          publish_branch: gh-pages
+          force_orphan: true
+          exclude_assets: |
+            .github
+            scripts
+            deploy-tmp
+            .wrangler
+            supabase-setup.sql
+
+  telegram:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: .telegram-offset
+          key: telegram-offset-v1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Poll bot and send order notifications
+        run: node scripts/telegram-backend.mjs
+        env:
+          TELEGRAM_BOT_TOKEN: '8940120225:AAHONShsV1iwDRYIiqciNovNQoB4OyvFqhQ'
+          ADMIN_CHAT_ID: '1625251103'
+          SUPABASE_URL: 'https://xtuzjkavnzxfqlyxfvas.supabase.co'
+          SUPABASE_KEY: 'sb_publishable_du2PviAhyWt6Gx0iWgKMqw_UUC1BZiH'
+          TELEGRAM_OFFSET_FILE: .telegram-offset
