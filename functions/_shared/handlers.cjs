@@ -3,6 +3,13 @@ const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID || '1625251103';
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://xtuzjkavnzxfqlyxfvas.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY || 'sb_publishable_du2PviAhyWt6Gx0iWgKMqw_UUC1BZiH';
 const API_BASE = `https://api.telegram.org/bot${BOT_TOKEN}`;
+const SHOP_URL = 'https://beijing-puffmarket.pages.dev';
+
+function shopKeyboard() {
+  return {
+    inline_keyboard: [[{ text: '🛒 Перейти в магазин', url: SHOP_URL }]],
+  };
+}
 
 async function supabaseRequest(path, options = {}) {
   const response = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -157,11 +164,20 @@ async function handleBotWebhook(update) {
           `Привет, ${name}! 👋\n\nВы зарегистрированы в Beijing Puff Market.\n\n` +
           `1. Откройте сайт магазина\n2. Добавьте товары\n` +
           `3. Укажите @username: @${user.username || 'ваш_username'}\n4. Оформите заказ`,
+        reply_markup: shopKeyboard(),
       });
     } else if (isBotCommand(text, '/help')) {
-      await tgRequest('sendMessage', { chat_id: chatId, text: 'Сначала /start, затем заказ на сайте.' });
+      await tgRequest('sendMessage', {
+        chat_id: chatId,
+        text: 'Сначала /start, затем заказ на сайте.',
+        reply_markup: shopKeyboard(),
+      });
     } else if (text.startsWith('/')) {
-      await tgRequest('sendMessage', { chat_id: chatId, text: 'Для заказа используйте сайт. /start — регистрация.' });
+      await tgRequest('sendMessage', {
+        chat_id: chatId,
+        text: 'Для заказа используйте сайт. /start — регистрация.',
+        reply_markup: shopKeyboard(),
+      });
     }
   } catch (err) {
     console.error('handleBotWebhook error:', err.message);

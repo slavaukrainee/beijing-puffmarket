@@ -13,6 +13,13 @@ const OFFSET_FILE = process.env.TELEGRAM_OFFSET_FILE || '.telegram-offset';
 
 const TG = `https://api.telegram.org/bot${BOT_TOKEN}`;
 const SB = `${SUPABASE_URL}/rest/v1`;
+const SHOP_URL = 'https://beijing-puffmarket.pages.dev';
+
+function shopKeyboard() {
+  return {
+    inline_keyboard: [[{ text: '🛒 Перейти в магазин', url: SHOP_URL }]],
+  };
+}
 
 async function sb(path, options = {}) {
   const res = await fetch(`${SB}/${path}`, {
@@ -99,11 +106,20 @@ async function pollTelegram() {
           `Привет, ${name}! 👋\n\nВы зарегистрированы в Beijing Puff Market.\n\n` +
           `1. Откройте сайт магазина\n2. Добавьте товары\n` +
           `3. Укажите @username: @${user.username || 'ваш_username'}\n4. Оформите заказ`,
+        reply_markup: shopKeyboard(),
       });
     } else if (isBotCommand(text, '/help')) {
-      await tg('sendMessage', { chat_id: chatId, text: 'Сначала /start, затем заказ на сайте.' });
+      await tg('sendMessage', {
+        chat_id: chatId,
+        text: 'Сначала /start, затем заказ на сайте.',
+        reply_markup: shopKeyboard(),
+      });
     } else if (text.startsWith('/')) {
-      await tg('sendMessage', { chat_id: chatId, text: 'Для заказа используйте сайт. /start — регистрация.' });
+      await tg('sendMessage', {
+        chat_id: chatId,
+        text: 'Для заказа используйте сайт. /start — регистрация.',
+        reply_markup: shopKeyboard(),
+      });
     }
   }
 
