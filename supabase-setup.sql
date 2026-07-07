@@ -1,5 +1,23 @@
 -- Run once in Supabase SQL Editor (optional but recommended)
 
+create table if not exists bot_users (
+  chat_id bigint primary key,
+  username text unique,
+  first_name text,
+  updated_at timestamptz default now()
+);
+
+alter table bot_users enable row level security;
+drop policy if exists "Allow anon read bot_users" on bot_users;
+create policy "Allow anon read bot_users"
+  on bot_users for select to anon using (true);
+drop policy if exists "Allow anon insert bot_users" on bot_users;
+create policy "Allow anon insert bot_users"
+  on bot_users for insert to anon with check (true);
+drop policy if exists "Allow anon update bot_users" on bot_users;
+create policy "Allow anon update bot_users"
+  on bot_users for update to anon using (true) with check (true);
+
 create table if not exists warehouse_stock (
   product_id bigint primary key,
   quantity integer not null default 0

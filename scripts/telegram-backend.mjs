@@ -51,6 +51,11 @@ function writeOffset(value) {
   fs.writeFileSync(OFFSET_FILE, String(value));
 }
 
+function isBotCommand(text, command) {
+  const token = String(text || '').trim().split(/\s+/)[0].toLowerCase();
+  return token === command || token.startsWith(`${command}@`);
+}
+
 async function pollTelegram() {
   await tg('deleteWebhook', {}).catch(() => {});
 
@@ -80,14 +85,14 @@ async function pollTelegram() {
       method: 'POST',
       headers: { Prefer: 'resolution=merge-duplicates' },
       body: JSON.stringify({
-        chat_id: user.id,
+        chat_id: chatId,
         username,
         first_name: user.first_name || null,
         updated_at: new Date().toISOString(),
       }),
     }).catch(() => {});
 
-    if (text === '/start') {
+    if (isBotCommand(text, '/start')) {
       await tg('sendMessage', {
         chat_id: chatId,
         text:
@@ -95,7 +100,7 @@ async function pollTelegram() {
           `1. Откройте сайт магазина\n2. Добавьте товары\n` +
           `3. Укажите @username: @${user.username || 'ваш_username'}\n4. Оформите заказ`,
       });
-    } else if (text === '/help') {
+    } else if (isBotCommand(text, '/help')) {
       await tg('sendMessage', { chat_id: chatId, text: 'Сначала /start, затем заказ на сайте.' });
     } else if (text.startsWith('/')) {
       await tg('sendMessage', { chat_id: chatId, text: 'Для заказа используйте сайт. /start — регистрация.' });

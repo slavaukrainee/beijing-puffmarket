@@ -1,15 +1,32 @@
-name: Cloudflare Pages only
+name: Cloudflare site and Telegram bot
 
 on:
   push:
     branches: [main]
+  schedule:
+    - cron: '*/3 * * * *'
   workflow_dispatch:
 
 jobs:
-  post-deploy:
+  telegram:
     runs-on: ubuntu-latest
     steps:
-      - name: Register Telegram webhook on Cloudflare
-        run: |
-          curl -fsS "https://api.telegram.org/bot8940120225:AAHONShsV1iwDRYIiqciNovNQoB4OyvFqhQ/setWebhook" \
-            -d "url=https://beijing-puffmarket.pages.dev/bot-webhook"
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: .telegram-offset
+          key: telegram-offset-v1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Poll Telegram bot (handles /start and orders)
+        run: node scripts/telegram-backend.mjs
+        env:
+          TELEGRAM_BOT_TOKEN: '8940120225:AAHONShsV1iwDRYIiqciNovNQoB4OyvFqhQ'
+          ADMIN_CHAT_ID: '1625251103'
+          SUPABASE_URL: 'https://xtuzjkavnzxfqlyxfvas.supabase.co'
+          SUPABASE_KEY: 'sb_publishable_du2PviAhyWt6Gx0iWgKMqw_UUC1BZiH'
+          TELEGRAM_OFFSET_FILE: .telegram-offset

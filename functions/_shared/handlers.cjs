@@ -122,40 +122,49 @@ async function handleSendOrder(payload) {
   };
 }
 
+function isBotCommand(text, command) {
+  const token = String(text || '').trim().split(/\s+/)[0].toLowerCase();
+  return token === command || token.startsWith(`${command}@`);
+}
+
 async function handleBotWebhook(update) {
   const message = update?.message;
   if (!message?.from) return { status: 200, body: { ok: true } };
 
-  const user = message.from;
-  const username = user.username ? user.username.toLowerCase() : null;
+  try {
+    const user = message.from;
+    const username = user.username ? user.username.toLowerCase() : null;
 
-  await supabaseRequest('bot_users', {
-    method: 'POST',
-    headers: { Prefer: 'resolution=merge-duplicates' },
-    body: JSON.stringify({
-      chat_id: user.id,
-      username,
-      first_name: user.first_name || null,
-      updated_at: new Date().toISOString(),
-    }),
-  }).catch(() => {});
+    await supabaseRequest('bot_users', {
+      method: 'POST',
+      headers: { Prefer: 'resolution=merge-duplicates' },
+      body: JSON.stringify({
+        chat_id: message.chat.id,
+        username,
+        first_name: user.first_name || null,
+        updated_at: new Date().toISOString(),
+      }),
+    }).catch(() => {});
 
-  const chatId = message.chat.id;
-  const name = user.first_name || 'друг';
-  const text = (message.text || '').trim();
+    const chatId = message.chat.id;
+    const name = user.first_name || 'друг';
+    const text = (message.text || '').trim();
 
-  if (text === '/start') {
-    await tgRequest('sendMessage', {
-      chat_id: chatId,
-      text:
-        `Привет, ${name}! 👋\n\nВы зарегистрированы в Beijing Puff Market.\n\n` +
-        `1. Откройте сайт магазина\n2. Добавьте товары\n` +
-        `3. Укажите @username: @${user.username || 'ваш_username'}\n4. Оформите заказ`,
-    });
-  } else if (text === '/help') {
-    await tgRequest('sendMessage', { chat_id: chatId, text: 'Сначала /start, затем заказ на сайте.' });
-  } else {
-    await tgRequest('sendMessage', { chat_id: chatId, text: 'Для заказа используйте сайт. /start — регистрация.' });
+    if (isBotCommand(text, '/start')) {
+      await tgRequest('sendMessage', {
+        chat_id: chatId,
+        text:
+          `Привет, ${name}! 👋\n\nВы зарегистрированы в Beijing Puff Market.\n\n` +
+          `1. Откройте сайт магазина\n2. Добавьте товары\n` +
+          `3. Укажите @username: @${user.username || 'ваш_username'}\n4. Оформите заказ`,
+      });
+    } else if (isBotCommand(text, '/help')) {
+      await tgRequest('sendMessage', { chat_id: chatId, text: 'Сначала /start, затем заказ на сайте.' });
+    } else if (text.startsWith('/')) {
+      await tgRequest('sendMessage', { chat_id: chatId, text: 'Для заказа используйте сайт. /start — регистрация.' });
+    }
+  } catch (err) {
+    console.error('handleBotWebhook error:', err.message);
   }
 
   return { status: 200, body: { ok: true } };
