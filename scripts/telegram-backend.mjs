@@ -225,7 +225,9 @@ async function main() {
     console.error('Missing env vars');
     process.exit(1);
   }
-  await pollTelegram();
+  if (process.env.TELEGRAM_ORDERS_ONLY !== '1') {
+    await pollTelegram();
+  }
   await processOrders();
   console.log('Done');
 }

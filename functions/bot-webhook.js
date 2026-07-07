@@ -9,3 +9,7 @@ export async function onRequestPost(context) {
     return Response.json({ error: err.message }, { status: 502 });
   }
 }
+
+export async function onRequestGet() {
+  return Response.json({ ok: true, service: 'beijing-puffmarket-bot' });
+}

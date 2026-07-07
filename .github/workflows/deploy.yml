@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: '*/3 * * * *'
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -13,18 +13,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Connect bot to Cloudflare (instant /start)
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        run: |
+          curl -fsS "https://api.telegram.org/bot${BOT_TOKEN}/deleteWebhook?drop_pending_updates=true"
+          curl -fsS -X POST "https://api.telegram.org/bot${BOT_TOKEN}/setWebhook" \
+            -H "Content-Type: application/json" \
+            -d '{"url":"https://beijing-puffmarket.pages.dev/bot-webhook","allowed_updates":["message"],"drop_pending_updates":true}'
+        env:
+          BOT_TOKEN: '8940120225:AAHONShsV1iwDRYIiqciNovNQoB4OyvFqhQ'
+
       - uses: actions/cache@v4
         with:
           path: .telegram-offset
           key: telegram-offset-v1
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Poll Telegram bot (handles /start and orders)
+      - name: Process new orders from Supabase
         run: node scripts/telegram-backend.mjs
         env:
+          TELEGRAM_ORDERS_ONLY: '1'
           TELEGRAM_BOT_TOKEN: '8940120225:AAHONShsV1iwDRYIiqciNovNQoB4OyvFqhQ'
           ADMIN_CHAT_ID: '1625251103'
           SUPABASE_URL: 'https://xtuzjkavnzxfqlyxfvas.supabase.co'
